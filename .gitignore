@@ -1,0 +1,11 @@
+# secrets — never commit
+.env
+.env.*
+!.env.example
+
+# dependencies / build output
+node_modules/
+.vercel/
+
+# macOS
+.DS_Store

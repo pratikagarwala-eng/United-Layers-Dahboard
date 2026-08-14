@@ -1,0 +1,2176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>UnitedLayer — Sequence &amp; Email Activity Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#ffffff; --ink:#101828; --ink2:#475467; --ink3:#98a2b3;
+    --line:#e4e7ec; --line2:#f0f2f5;
+    --brand:#2f6df6; --brand-dk:#1d4fd8; --brand-sub:#eaf0ff;
+    --ok:#0e9f6e; --warn:#b54708; --warn-bg:#fffaeb; --warn-line:#fedf89;
+    --err:#b42318; --err-bg:#fef3f2; --err-line:#fecdca;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; min-width:1180px;
+  }
+  .wrap{max-width:1560px;margin:0 auto;padding:20px 24px 64px}
+
+  /* ---------- top bar ---------- */
+  .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:16px}
+  .topbar h1{margin:0;font-size:21px;letter-spacing:-.02em}
+  .topbar .sub{color:var(--ink2);font-size:12.5px;margin-top:4px}
+  .topbar .sub a{color:var(--brand);text-decoration:none}
+  .topbar .sub a:hover{text-decoration:underline}
+  .refresh-box{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  .stamp{text-align:right;font-size:12px;color:var(--ink2);line-height:1.35}
+  .stamp b{color:var(--ink);font-variant-numeric:tabular-nums}
+  .stamp .tick{color:var(--ink3);font-size:11px}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:5px;vertical-align:1px}
+  .dot.busy{background:var(--brand);animation:pulse 1s infinite}
+  .dot.bad{background:var(--err)}
+  @keyframes pulse{50%{opacity:.25}}
+
+  button{font:inherit;cursor:pointer}
+  .btn{
+    background:var(--card);border:1px solid var(--line);color:var(--ink);
+    padding:7px 12px;border-radius:8px;box-shadow:var(--shadow);white-space:nowrap;
+  }
+  .btn:hover{background:#fafbfc}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:none}
+  .btn.primary:hover{background:var(--brand-dk)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+
+  /* ---------- cards ---------- */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:22px}
+  .card-hd{padding:16px 18px 14px;border-bottom:1px solid var(--line2)}
+  .card-hd h2{margin:0;font-size:16.5px;letter-spacing:-.01em}
+  .card-hd .desc{color:var(--ink2);font-size:12.5px;margin-top:5px;max-width:1050px}
+  .card-hd .desc code{background:var(--line2);padding:1px 5px;border-radius:4px;font-size:11.5px}
+
+  /* ---------- filter panel ---------- */
+  .filters{padding:12px 18px;border-bottom:1px solid var(--line2);background:#fcfcfd;border-radius:0}
+  .frow{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:flex-end}
+  .fgroup{display:flex;flex-direction:column;gap:5px}
+  .flab{font-size:11px;font-weight:600;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em}
+  .quick{display:flex;flex-wrap:wrap;gap:6px}
+  .chipbtn{
+    background:var(--card);border:1px solid var(--line);border-radius:999px;
+    padding:5px 11px;font-size:12.5px;color:var(--ink2)
+  }
+  .chipbtn:hover{border-color:#cdd5df;color:var(--ink)}
+  .chipbtn.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+  input[type=date],select{
+    font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink)
+  }
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
+  .seg button{border:0;background:transparent;padding:6px 12px;font-size:12.5px;color:var(--ink2);border-right:1px solid var(--line2)}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--brand-sub);color:var(--brand-dk);font-weight:600}
+  .cb{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink);cursor:pointer;user-select:none;padding-bottom:6px}
+  .cb input{width:15px;height:15px;accent-color:var(--brand);cursor:pointer}
+  .hint{font-size:11.5px;color:var(--ink3)}
+
+  /* ---------- multiselect ---------- */
+  .ms{position:relative}
+  .ms-btn{
+    background:var(--card);border:1px solid var(--line);border-radius:7px;padding:6px 10px;
+    min-width:210px;text-align:left;display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:13px;color:var(--ink)
+  }
+  .ms-btn .car{color:var(--ink3);font-size:10px}
+  .ms-btn.active{border-color:var(--brand);box-shadow:0 0 0 3px rgba(47,109,246,.12)}
+  .ms-pop{
+    display:none;position:absolute;z-index:60;top:calc(100% + 5px);left:0;width:320px;
+    background:var(--card);border:1px solid var(--line);border-radius:9px;
+    box-shadow:0 12px 28px rgba(16,24,40,.16);padding:9px
+  }
+  .ms-pop.open{display:block}
+  .ms-pop input[type=text]{width:100%;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;margin-bottom:7px}
+  .ms-acts{display:flex;gap:6px;margin-bottom:7px}
+  .ms-acts button{flex:1;font-size:11.5px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink2)}
+  .ms-acts button:hover{background:#fafbfc;color:var(--ink)}
+  .ms-list{max-height:250px;overflow:auto}
+  .ms-list label{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;font-size:12.5px;cursor:pointer}
+  .ms-list label:hover{background:var(--line2)}
+  .ms-list input{accent-color:var(--brand);flex:0 0 auto}
+  .ms-list .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ms-list .ct{margin-left:auto;color:var(--ink3);font-size:11px;font-variant-numeric:tabular-nums;flex:0 0 auto}
+  .ms-empty{padding:10px;color:var(--ink3);font-size:12px;text-align:center}
+
+  /* ---------- kpi ---------- */
+  .kpis{display:flex;gap:0;border-bottom:1px solid var(--line2);flex-wrap:wrap}
+  .kpi{padding:14px 18px;border-right:1px solid var(--line2);min-width:190px;flex:0 0 auto}
+  .kpi .k-lab{font-size:11px;font-weight:600;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em}
+  .kpi .k-val{font-size:26px;font-weight:650;letter-spacing:-.025em;margin-top:3px;font-variant-numeric:tabular-nums}
+  .kpi .k-sub{font-size:11.5px;color:var(--ink3);margin-top:2px}
+  .delta{font-size:12.5px;font-weight:600;margin-top:4px}
+  .delta.up{color:var(--ok)} .delta.dn{color:var(--err)} .delta.flat{color:var(--ink3)}
+
+  /* ---------- chips ---------- */
+  .chips{padding:10px 18px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;border-bottom:1px solid var(--line2);background:#fcfcfd}
+  .chips .lb{font-size:11px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em;margin-right:2px}
+  .chip{
+    background:var(--brand-sub);color:var(--brand-dk);border:1px solid #d3e0ff;
+    border-radius:999px;padding:3px 10px;font-size:12px;font-weight:500
+  }
+  .chip.n{background:var(--line2);color:var(--ink2);border-color:var(--line)}
+
+  /* ---------- chart ---------- */
+  .chart-area{padding:14px 18px 18px;position:relative}
+  .chart-box{height:440px;position:relative}
+  .overlay{
+    position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;background:rgba(255,255,255,.94);border-radius:8px;padding:24px;z-index:5
+  }
+  .overlay.show{display:flex}
+  .overlay .ttl{font-weight:650;font-size:15px;margin-bottom:6px}
+  .overlay .msg{color:var(--ink2);font-size:13px;max-width:620px}
+  .overlay .msg code{background:var(--line2);padding:1px 5px;border-radius:4px}
+  .spin{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:sp .8s linear infinite;margin-bottom:12px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .foot{margin-top:10px;font-size:11.5px;color:var(--ink3);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+  /* ---------- notices ---------- */
+  .notice{border-radius:9px;padding:11px 14px;font-size:12.5px;margin:0 18px 14px;line-height:1.5}
+  /* collapsed-by-default data-quality disclosure */
+  details.notice{padding:0}
+  details.notice>summary{
+    list-style:none;cursor:pointer;padding:7px 14px;display:flex;align-items:center;gap:7px;
+    font-size:12px;font-weight:600;border-radius:9px;user-select:none
+  }
+  details.notice>summary::-webkit-details-marker{display:none}
+  details.notice>summary:hover{filter:brightness(.97)}
+  details.notice>summary .tw{
+    font-weight:700;font-size:10.5px;background:rgba(122,46,14,.12);
+    border-radius:999px;padding:1px 7px;margin-left:auto
+  }
+  details.notice>summary .cv{transition:transform .15s;font-size:10px;opacity:.65}
+  details[open].notice>summary .cv{transform:rotate(90deg)}
+  details.notice .body{padding:0 14px 11px}
+  /* collapsible section inside the diagnostics card */
+  details.disclose>summary{
+    list-style:none;cursor:pointer;display:flex;align-items:center;gap:7px;margin:18px 0 0;
+    font-size:11px;font-weight:600;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em;
+    user-select:none;padding:5px 0
+  }
+  details.disclose>summary::-webkit-details-marker{display:none}
+  details.disclose>summary:hover{color:var(--ink)}
+  details.disclose>summary .cv{font-size:9px;opacity:.6;transition:transform .15s}
+  details[open].disclose>summary .cv{transform:rotate(90deg)}
+  /* ---------- chart 3: live platform stats card ---------- */
+  .src-tag{
+    font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;
+    background:var(--brand-sub);color:var(--brand-dk);border:1px solid #d3e0ff;
+    border-radius:999px;padding:2px 8px;vertical-align:3px;margin-left:6px
+  }
+  .two-up{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+  .chart-box.sm{height:290px}
+  .sub-ttl{font-size:13px;font-weight:650;margin-bottom:2px}
+  .sub-desc{font-size:11.5px;color:var(--ink3);margin-bottom:8px;min-height:30px}
+
+  /* unobtrusive footer link that reveals the diagnostics card */
+  .pagefoot{text-align:center;padding:10px 0 4px}
+  .linkbtn{
+    background:none;border:0;color:var(--ink3);font-size:11.5px;padding:6px 10px;
+    border-radius:6px;text-decoration:none
+  }
+  .linkbtn:hover{color:var(--ink2);background:var(--line2)}
+  details.disclose>summary .ct{
+    text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink3);font-size:11px
+  }
+  details.notice .body ul{margin:0;padding-left:18px}
+  .notice.warn{background:var(--warn-bg);border:1px solid var(--warn-line);color:#7a2e0e}
+  .notice.err{background:var(--err-bg);border:1px solid var(--err-line);color:var(--err)}
+  .notice b{font-weight:650}
+  .notice ul{margin:6px 0 0;padding-left:18px}
+  .notice li{margin:2px 0}
+  .notice .lnk{color:inherit;text-decoration:underline;cursor:pointer;background:none;border:0;padding:0;font:inherit}
+  #globalNotice{margin:0 0 18px}
+
+  /* ---------- modal ---------- */
+  .modal{position:fixed;inset:0;background:rgba(16,24,40,.55);display:none;z-index:200;padding:34px}
+  .modal.open{display:flex;align-items:center;justify-content:center}
+  .modal-in{background:var(--card);border-radius:12px;width:100%;max-width:1420px;max-height:100%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(16,24,40,.3)}
+  .modal-hd{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+  .modal-hd h3{margin:0;font-size:16px}
+  .modal-hd .m-sub{color:var(--ink2);font-size:12.5px;margin-top:4px}
+  .modal-acts{display:flex;gap:8px;flex:0 0 auto}
+  .tbl-scroll{overflow:auto;flex:1;min-height:180px}
+  table.dt{border-collapse:collapse;width:100%;font-size:12.5px}
+  table.dt th{
+    position:sticky;top:0;background:#f9fafb;border-bottom:1px solid var(--line);
+    padding:9px 11px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--ink2);cursor:pointer;white-space:nowrap;z-index:2
+  }
+  table.dt th:hover{background:var(--line2);color:var(--ink)}
+  table.dt th .ar{color:var(--brand);margin-left:4px}
+  table.dt td{padding:8px 11px;border-bottom:1px solid var(--line2);white-space:nowrap;max-width:290px;overflow:hidden;text-overflow:ellipsis}
+  table.dt tr:hover td{background:#fcfcfd}
+  table.dt td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:600}
+  .pill.y{background:#e7f7ef;color:#05603a}
+  .pill.n{background:var(--line2);color:var(--ink2)}
+  .modal-ft{padding:9px 18px;border-top:1px solid var(--line);font-size:11.5px;color:var(--ink3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div>
+      <h1>UnitedLayer — Sequence &amp; Email Activity Dashboard</h1>
+      <div class="sub">
+        Live from
+        <a id="srcLink" href="#" target="_blank" rel="noopener">Google Sheet</a>
+        · all dates handled as <b>IST (Asia/Kolkata)</b> wall-clock · each chart filters independently
+      </div>
+    </div>
+    <div class="refresh-box">
+      <div class="stamp">
+        <div><span class="dot" id="statusDot"></span>Last updated <b id="lastUpd">—</b></div>
+        <div class="tick" id="nextTick">auto-refresh every 60s</div>
+      </div>
+      <button class="btn primary" id="btnRefresh">Refresh now</button>
+    </div>
+  </div>
+
+  <div id="globalNotice"></div>
+
+  <!-- ==================== CHART 1 ==================== -->
+  <div class="card" id="card1">
+    <div class="card-hd">
+      <h2>1 · Contacts added to sequences</h2>
+      <div class="desc">
+        Contacts newly enrolled into a sequence, counted on their <code>addingDate</code>.
+        One source row = one contact-in-one-sequence, so the same person enrolled in 3 sequences counts 3 times
+        unless <b>Unique contacts only</b> is ticked. Owner is the <b>first name on the sequence</b>
+        (<code>Rahul_US_Direct_July</code> → Rahul), since licence seats are shared between people.
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="frow">
+        <div class="fgroup">
+          <span class="flab">Date range (addingDate)</span>
+          <div class="quick" id="q1"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">From</span>
+          <input type="date" id="from1">
+        </div>
+        <div class="fgroup">
+          <span class="flab">To</span>
+          <input type="date" id="to1">
+        </div>
+        <div class="fgroup">
+          <span class="flab">Sequence</span>
+          <div class="ms" id="ms1seq"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Sequence owner</span>
+          <div class="ms" id="ms1own"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Bucket</span>
+          <div class="seg" id="b1"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Bars</span>
+          <div class="seg" id="st1"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Empty days</span>
+          <div class="seg" id="ge1"></div>
+        </div>
+        <label class="cb"><input type="checkbox" id="uniq1"> Unique contacts only</label>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpi1"></div>
+    <div class="chips" id="chips1"></div>
+    <div id="notice1"></div>
+
+    <div class="chart-area">
+      <div class="chart-box">
+        <canvas id="cv1"></canvas>
+        <div class="overlay" id="ov1"></div>
+      </div>
+      <div class="foot">
+        <span>X axis: <b id="ax1">—</b> (IST) · Y axis: <b id="ay1">Enrollments</b><span id="gap1"></span></span>
+        <span>Click any bar segment to see the underlying rows &amp; export CSV</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== CHART 2 ==================== -->
+  <div class="card" id="card2">
+    <div class="card-hd">
+      <h2>2 · Emails sent</h2>
+      <div class="desc">
+        Emails sent out of a sequence, counted on their <code>deliveryDate</code>.
+        <b>First email of sequence only</b> keeps rows whose <code>sequenceStepNumber</code> equals that sequence's
+        <code>email_step_number</code> in <code>Campaign Structure</code> — read per sequence, never hardcoded to step 1.
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="frow">
+        <div class="fgroup">
+          <span class="flab">Date range (deliveryDate)</span>
+          <div class="quick" id="q2"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">From</span>
+          <input type="date" id="from2">
+        </div>
+        <div class="fgroup">
+          <span class="flab">To</span>
+          <input type="date" id="to2">
+        </div>
+        <div class="fgroup">
+          <span class="flab">Emails counted</span>
+          <div class="seg" id="fe2"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Sequence</span>
+          <div class="ms" id="ms2seq"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Sequence owner</span>
+          <div class="ms" id="ms2own"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Bucket</span>
+          <div class="seg" id="b2"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Break down by</span>
+          <div class="seg" id="bd2"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Bars</span>
+          <div class="seg" id="st2"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Empty days</span>
+          <div class="seg" id="ge2"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpi2"></div>
+    <div id="notice2"></div>
+
+    <div class="chart-area">
+      <div class="chart-box">
+        <canvas id="cv2"></canvas>
+        <div class="overlay" id="ov2"></div>
+      </div>
+      <div class="foot">
+        <span>X axis: <b id="ax2">—</b> (IST) · Y axis: <b id="ay2">Emails sent</b><span id="gap2"></span></span>
+        <span>Click any bar segment to see the underlying rows &amp; export CSV</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== CHART 3 · EMAIL PERFORMANCE OVERVIEW ==================== -->
+  <div class="card" id="card3">
+    <div class="card-hd">
+      <h2>3 · Email performance overview <span class="src-tag">Live</span></h2>
+      <div class="desc">
+        Account-wide email results for the selected date range, taken live from the sending platform rather than
+        the sheet — use it as the authoritative cross-check on charts 1 and 2. Updates automatically whenever you
+        change the range.
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="frow">
+        <div class="fgroup">
+          <span class="flab">Date range</span>
+          <div class="quick" id="q3"></div>
+        </div>
+        <div class="fgroup"><span class="flab">From</span><input type="date" id="from3"></div>
+        <div class="fgroup"><span class="flab">To</span><input type="date" id="to3"></div>
+        <div class="fgroup">
+          <span class="flab">&nbsp;</span>
+          <button class="btn" id="btnPull3">Refresh stats</button>
+        </div>
+        <div class="fgroup">
+          <span class="flab">&nbsp;</span>
+          <span class="hint" id="stamp3"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="chips" id="chips3"></div>
+    <div id="notice3"></div>
+
+    <div class="chart-area">
+      <div class="two-up">
+        <div>
+          <div class="sub-ttl">Engagement funnel</div>
+          <div class="sub-desc">How many contacts survive each stage. % is of the stage above, so you can see where people drop off.</div>
+          <div class="chart-box sm"><canvas id="cv3a"></canvas></div>
+        </div>
+        <div>
+          <div class="sub-ttl">Delivery health</div>
+          <div class="sub-desc">What happened to the sends. % is of contacted. These overlap — bounced is part of not-reached — so they are not stacked.</div>
+          <div class="chart-box sm"><canvas id="cv3b"></canvas></div>
+        </div>
+      </div>
+      <div class="overlay" id="ov3"></div>
+      <div class="foot">
+        <span>Source: <b>sending platform</b> · counts are account-wide, not filtered by sequence or owner</span>
+        <span id="range3"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DIAGNOSTICS (hidden until asked for) ==================== -->
+  <div class="card" id="cardDiag" hidden>
+    <div class="card-hd">
+      <h2>Data source &amp; join diagnostics</h2>
+      <div class="desc">What was loaded from each tab, how columns were mapped, and how the first-email step resolved per sequence.</div>
+    </div>
+    <div class="chart-area" id="diagBody" style="padding-top:4px"></div>
+  </div>
+
+  <div class="pagefoot">
+    <button class="linkbtn" id="btnDiag">Data source &amp; join diagnostics</button>
+  </div>
+
+</div>
+
+<!-- ==================== DRILL-DOWN MODAL ==================== -->
+<div class="modal" id="modal">
+  <div class="modal-in">
+    <div class="modal-hd">
+      <div>
+        <h3 id="mTitle">Detail</h3>
+        <div class="m-sub" id="mSub"></div>
+      </div>
+      <div class="modal-acts">
+        <button class="btn" id="mCsv">Export CSV</button>
+        <button class="btn" id="mClose">Close</button>
+      </div>
+    </div>
+    <div class="tbl-scroll"><table class="dt" id="mTbl"></table></div>
+    <div class="modal-ft" id="mFoot"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =======================================================================
+   UnitedLayer Sequence & Email Activity Dashboard
+   -----------------------------------------------------------------------
+   Data source .... Google Sheet, read client-side via the gviz JSONP
+                    endpoint (responseHandler). JSONP is used rather than
+                    fetch() because docs.google.com sends no
+                    Access-Control-Allow-Origin header, so fetch() from a
+                    file:// page would be blocked by CORS.
+   Timezone ....... Sheet timestamps carry no offset. They are treated as
+                    IST (Asia/Kolkata) wall-clock and held internally as
+                    "civil" epoch-ms built with Date.UTC(...). Every
+                    read/format uses UTC getters, so bucketing is identical
+                    no matter what timezone the viewer's browser is in.
+   ======================================================================= */
+
+const SHEET_ID = '1Bco-CLXyRhr_aa5bJ_bzhxfxV7UAstH5Sy0x00mbozg';
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit';
+const REFRESH_MS = 60000;
+
+/* Tab gids were read off the live workbook. Names are shown in diagnostics
+   exactly as they appear in the sheet (note the "Sequnce" typo). */
+const TABS = {
+  emails:    { gid: '77846492',   name: 'All Email Activities' },
+  sequences: { gid: '158136843',  name: 'All Sequences' },
+  campaign:  { gid: '586951354',  name: 'Campaign Structure' },
+  contacts:  { gid: '1804089604', name: 'List all Contact In Sequnce' }
+};
+
+/* Owner = the first name on the sequence, e.g. "Rahul_US_Direct_July" -> Rahul.
+   ownerUserId is NOT used for this: licences are shared, so one id covers several
+   people. The raw id is still carried on every row and shown in drill-downs.
+
+   OWNER_FIXES handles the sequences that don't start with a person: typos, and
+   names where the person sits later in the string. Keyed by the EXACT sequence
+   name (lowercased/trimmed) so a fix can never spill onto a similarly-named
+   sequence. Every patch applied is listed in the diagnostics card, and any
+   sequence not listed here just uses its first token. */
+const OWNER_FIXES = {
+  'nishany_indirect_hunting_automated': 'Nishant',   // typo for Nishant
+  'manual email_ishika'               : 'Ishika',    // person named at the end
+  'manual_testinfra_ishika'           : 'Ishika',
+  'manual_aryaman'                    : 'Aryaman',
+  'inbound leads_gaurav master'       : 'Gaurav'
+};
+
+const MAX_SERIES = 12;           // series shown before collapsing into "Other"
+const PALETTE = ['#2f6df6','#0e9f6e','#f79009','#7a5af8','#e6483d','#06aed4','#d444f1',
+                 '#84cc16','#f97066','#0ba5ec','#eaaa08','#875bf7','#12b76a','#ee46bc'];
+
+Chart.register(ChartDataLabels);
+Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+Chart.defaults.color = '#475467';
+
+/* ===================================================================
+   1. Small helpers
+   =================================================================== */
+const $  = id => document.getElementById(id);
+const nf = n => (n == null || isNaN(n)) ? '—' : Number(n).toLocaleString('en-US');
+const esc = s => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const DAY = 86400000;
+const titleCase = s => String(s||'').split(/[\s.]+/).filter(Boolean)
+  .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
+/* ---- civil-time (IST wall-clock) helpers: always UTC getters ---- */
+const cY = t => new Date(t).getUTCFullYear();
+const cM = t => new Date(t).getUTCMonth();
+const cD = t => new Date(t).getUTCDate();
+const startOfDay = t => Date.UTC(cY(t), cM(t), cD(t));
+function startOfWeek(t){                                   // ISO week, Monday
+  const d = new Date(startOfDay(t));
+  const off = (d.getUTCDay() + 6) % 7;
+  return d.getTime() - off * DAY;
+}
+const startOfMonth = t => Date.UTC(cY(t), cM(t), 1);
+
+/* "now" as IST wall-clock: shift real UTC by +5:30 then read with UTC getters */
+const IST_OFFSET = 5.5 * 3600000;
+const istNow = () => Date.now() + IST_OFFSET;
+
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const iso = t => {
+  const d = new Date(t);
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0') + '-' +
+         String(d.getUTCDate()).padStart(2,'0');
+};
+const fmtDay   = t => cD(t) + ' ' + MON[cM(t)] + ' ' + String(cY(t)).slice(2);
+const fmtMonth = t => MON[cM(t)] + ' ' + cY(t);
+function fmtDateTime(t){
+  if (t == null) return '';
+  const d = new Date(t);
+  return iso(t) + ' ' + String(d.getUTCHours()).padStart(2,'0') + ':' +
+         String(d.getUTCMinutes()).padStart(2,'0') + ':' + String(d.getUTCSeconds()).padStart(2,'0');
+}
+function clockNow(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') +
+         ':' + String(d.getSeconds()).padStart(2,'0');
+}
+
+/* ---- robust date parsing: gviz Date(), ISO, D/M/Y, serial, epoch ---- */
+function parseCivil(v){
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return fromSerial(v);
+  if (v instanceof Date) return Date.UTC(v.getFullYear(), v.getMonth(), v.getDate(),
+                                         v.getHours(), v.getMinutes(), v.getSeconds());
+  const s = String(v).trim();
+  if (!s) return null;
+  let m = /^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/.exec(s);            // gviz native
+  if (m) return Date.UTC(+m[1], +m[2], +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(s); // ISO-ish
+  if (m) return Date.UTC(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  m = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(s);
+  if (m){                       // ambiguous: Google's US default is M/D/Y unless first > 12
+    let a = +m[1], b = +m[2], mo, d;
+    if (a > 12) { d = a; mo = b; } else { mo = a; d = b; }
+    return Date.UTC(+m[3], mo-1, d, +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  }
+  const n = Number(s);
+  if (!isNaN(n)) return fromSerial(n);
+  const p = Date.parse(s);                                                          // last resort
+  if (!isNaN(p)) { const d = new Date(p);
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()); }
+  return null;
+}
+function fromSerial(n){
+  if (!isFinite(n)) return null;
+  if (n > 1e11) return n;                       // already epoch-ms
+  if (n > 1e9)  return n * 1000;                // epoch-seconds
+  if (n > 1000) return Math.round((n - 25569) * DAY);   // Sheets/Excel serial
+  return null;
+}
+
+/* ===================================================================
+   2. Transport — gviz JSONP (no CORS headers on docs.google.com)
+   =================================================================== */
+let cbSeq = 0;
+function gvizJSONP(gid, timeout = 45000){
+  return new Promise((resolve, reject) => {
+    const cb = '__gvcb' + (++cbSeq) + '_' + Math.floor(Math.random()*1e9);
+    const sc = document.createElement('script');
+    let done = false;
+    const cleanup = () => { done = true; clearTimeout(tm); try{ delete window[cb]; }catch(e){ window[cb]=undefined; }
+                            if (sc.parentNode) sc.parentNode.removeChild(sc); };
+    const tm = setTimeout(() => { if(!done){ cleanup(); reject(new Error('Timed out after '+(timeout/1000)+'s')); } }, timeout);
+    window[cb] = resp => { cleanup(); resolve(resp); };
+    sc.onerror = () => { if(!done){ cleanup(); reject(new Error('Network/permission error — the sheet may not be link-shareable')); } };
+    sc.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+             '/gviz/tq?tqx=responseHandler:' + cb + ';out:json&gid=' + gid + '&_=' + Date.now();
+    document.head.appendChild(sc);
+  });
+}
+
+/* gviz table -> {headers:[], rows:[{}], rawCount} */
+function tableToRows(resp){
+  const t = (resp && resp.table) || {};
+  const cols = (t.cols || []).map(c => String((c.label != null ? c.label : c.id) || '').trim());
+  const rows = (t.rows || []).map(r => {
+    const o = {};
+    (r.c || []).forEach((cell, i) => { o[cols[i] || ('col' + i)] = cell ? cell.v : null; });
+    return o;
+  });
+  /* an empty tab still returns one unnamed column and zero rows */
+  const headers = cols.filter(Boolean);
+  return { headers, rows, empty: rows.length === 0 || headers.length === 0 };
+}
+
+/* fuzzy header resolution so the sheet can be re-shaped without code edits */
+function pickCol(headers, patterns){
+  for (const p of patterns){
+    const hit = headers.find(h => p.test(h.replace(/[\s_]+/g,'').toLowerCase()));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/* ===================================================================
+   4. Data model — built fresh on every load, cached in memory
+   =================================================================== */
+const DB = {
+  loaded:false, loading:false, error:null, lastUpdated:null,
+  seqDim:{},            // sequenceId -> {name, owner}
+  seqDimHasOwner:false, seqDimHeaders:[], seqDimRows:0,
+  firstStep:{},         // sequenceId -> first-email step number
+  campaignHeaders:[], campaignRows:0,
+  emails:[], emailHeaders:[], emailRawRows:0,
+  contacts:[], contactHeaders:[], contactRawRows:0, contactMap:null,
+  campRaw:{},
+  dq:{ chart1:{}, chart2:{} }
+};
+
+async function loadAll(){
+  if (DB.loading) return;
+  DB.loading = true; DB.error = null;
+  setStatus('busy', 'loading…');
+  try{
+    const [emR, sqR, cpR, ctR] = await Promise.all([
+      gvizJSONP(TABS.emails.gid), gvizJSONP(TABS.sequences.gid),
+      gvizJSONP(TABS.campaign.gid), gvizJSONP(TABS.contacts.gid)
+    ]);
+    buildModel(tableToRows(emR), tableToRows(sqR), tableToRows(cpR), tableToRows(ctR));
+    DB.loaded = true; DB.lastUpdated = new Date();
+    setStatus('ok');
+  }catch(err){
+    DB.error = err.message || String(err);
+    setStatus('bad', 'failed');
+  }finally{
+    DB.loading = false;
+    renderEverything();          // keeps existing filter state untouched
+  }
+}
+
+function buildModel(em, sq, cp, ct){
+  /* ---------- All Sequences (dimension) ---------- */
+  DB.seqDim = {}; DB.seqDimHasOwner = false;
+  DB.seqDimHeaders = sq.headers; DB.seqDimRows = sq.rows.length;
+  if (!sq.empty){
+    const cId    = pickCol(sq.headers, [/^sequenceid$/, /sequence.*id/, /^id$/, /campaignid/]);
+    const cName  = pickCol(sq.headers, [/^sequencename$/, /sequence.*name/, /^name$/, /title/]);
+    const cOwner = pickCol(sq.headers, [/owner/, /createdby/, /assigned/, /^user$/, /useremail/, /email$/]);
+    DB.seqDimHasOwner = !!cOwner;
+    sq.rows.forEach(r => {
+      const id = r[cId] == null ? '' : String(r[cId]).trim();
+      if (!id) return;
+      DB.seqDim[id] = {
+        name : cName  ? String(r[cName]  == null ? '' : r[cName]).trim()  : '',
+        owner: cOwner ? String(r[cOwner] == null ? '' : r[cOwner]).trim() : ''
+      };
+    });
+  }
+
+  /* ---------- Campaign Structure: sequenceId -> first email step id + index ----------
+     email_step_number is the EMAIL index (1st email, 2nd email…), NOT the absolute
+     position of that step in the sequence. email_step_id is the reliable key; it is
+     turned into an absolute step further down, once the contacts tab is parsed. */
+  DB.campRaw = {}; DB.campaignHeaders = cp.headers; DB.campaignRows = cp.rows.length;
+  if (!cp.empty){
+    const kId    = pickCol(cp.headers, [/^campaignid$/, /campaign.*id/, /sequence.*id/, /^id$/]);
+    const kStep  = pickCol(cp.headers, [/emailstepnumber/, /firstemailstep/, /step.*number/, /stepno/, /^step$/]);
+    const kStepId= pickCol(cp.headers, [/emailstepid/, /step.*id/]);
+    cp.rows.forEach(r => {
+      const id = r[kId] == null ? '' : String(r[kId]).trim();
+      const st = r[kStep] == null ? null : Number(r[kStep]);
+      const sid = kStepId && r[kStepId] != null ? String(r[kStepId]).trim() : '';
+      if (!id || st == null || isNaN(st)) return;
+      const cur = DB.campRaw[id];
+      /* if a sequence lists several email steps, the first email is the lowest index */
+      if (!cur || st < cur.idx) DB.campRaw[id] = { idx: st, stepId: sid };
+    });
+  }
+
+  /* ---------- All Email Activities (fact for chart 2) ---------- */
+  DB.emailHeaders = em.headers; DB.emailRawRows = em.rows.length;
+  const eSeq  = pickCol(em.headers, [/^sequenceid$/, /sequence.*id/, /campaign.*id/]);
+  const eName = pickCol(em.headers, [/^sequencename$/, /sequence.*name/]);
+  const eStep = pickCol(em.headers, [/^sequencestepnumber$/, /stepnumber$/, /^step$/]);
+  const eDisp = pickCol(em.headers, [/stepdisplayname/, /displayname/]);
+  const eDate = pickCol(em.headers, [/deliverydate/, /sentdate/, /^date$/, /senton/, /createdat/]);
+  const eMail = pickCol(em.headers, [/^email$/, /contactemail/, /prospectemail/]);
+  const eCid  = pickCol(em.headers, [/^contactid$/, /contact.*id/, /prospectid/]);
+  const eFn   = pickCol(em.headers, [/^firstname$/]);
+  const eLn   = pickCol(em.headers, [/^lastname$/]);
+  const eCo   = pickCol(em.headers, [/^company$/, /account/, /organi/]);
+  const eBox  = pickCol(em.headers, [/emailaccountemail/, /fromemail/, /mailbox/, /sender/]);
+  const flag  = k => pickCol(em.headers, [new RegExp('^' + k + '$')]);
+  const fDel = flag('isdelivered'), fOpn = flag('isopened'), fRep = flag('isreplied'),
+        fBnc = flag('isbounced'),   fClk = flag('isclicked'), fOut = flag('isoptedout');
+  const truthy = v => v === true || /^(true|yes|1)$/i.test(String(v == null ? '' : v).trim());
+
+  DB.emails = em.rows.map((r, i) => {
+    const box = eBox ? String(r[eBox] == null ? '' : r[eBox]).trim() : '';
+    const stepNum  = eStep ? Number(r[eStep]) : NaN;
+    const stepDisp = eDisp ? Number(r[eDisp]) : NaN;
+    return {
+      _i: i,
+      seqId  : r[eSeq] == null ? '' : String(r[eSeq]).trim(),
+      seqName: eName ? String(r[eName] == null ? '' : r[eName]).trim() : '',
+      step   : isNaN(stepNum) ? null : stepNum,
+      stepDisp: isNaN(stepDisp) ? null : stepDisp,
+      ts     : parseCivil(eDate ? r[eDate] : null),
+      rawDate: eDate ? (r[eDate] == null ? '' : String(r[eDate])) : '',
+      email  : eMail ? String(r[eMail] == null ? '' : r[eMail]).trim() : '',
+      cid    : eCid ? String(r[eCid] == null ? '' : r[eCid]).trim() : '',
+      name   : ((eFn ? (r[eFn]||'') : '') + ' ' + (eLn ? (r[eLn]||'') : '')).trim(),
+      company: eCo ? String(r[eCo] == null ? '' : r[eCo]).trim() : '',
+      mailbox: box,
+      delivered: fDel ? truthy(r[fDel]) : null,
+      opened   : fOpn ? truthy(r[fOpn]) : null,
+      replied  : fRep ? truthy(r[fRep]) : null,
+      bounced  : fBnc ? truthy(r[fBnc]) : null,
+      clicked  : fClk ? truthy(r[fClk]) : null,
+      optedOut : fOut ? truthy(r[fOut]) : null
+    };
+  });
+
+  /* ---------- List all Contact In Sequnce (fact for chart 1) ---------- */
+  DB.contactHeaders = ct.headers; DB.contactRawRows = ct.rows.length; DB.contactMap = null;
+  DB.contacts = [];
+  if (!ct.empty){
+    const m = {
+      seq  : pickCol(ct.headers, [/^sequenceid$/, /sequence.*id/, /campaign.*id/]),
+      name : pickCol(ct.headers, [/^sequencename$/, /sequence.*name/]),
+      date : pickCol(ct.headers, [/addingdate/, /addeddate/, /dateadded/, /addedon/, /enrolled/, /^date$/, /createdat/]),
+      email: pickCol(ct.headers, [/^email$/, /contactemail/, /prospectemail/, /workemail/]),
+      cid  : pickCol(ct.headers, [/^contactid$/, /contact.*id/, /prospectid/, /^id$/]),
+      fn   : pickCol(ct.headers, [/^firstname$/]),
+      ln   : pickCol(ct.headers, [/^lastname$/]),
+      full : pickCol(ct.headers, [/^name$/, /fullname/, /contactname/]),
+      co   : pickCol(ct.headers, [/^company$/, /account/, /organi/]),
+      title: pickCol(ct.headers, [/^title$/, /jobtitle/, /designation/]),
+      status:pickCol(ct.headers, [/statusinsequence/, /status/, /state/]),
+      stepId:pickCol(ct.headers, [/^stepid$/, /step.*id/]),
+      stepNm:pickCol(ct.headers, [/^stepname$/, /step.*name/, /step.*number/])
+    };
+    DB.contactMap = m;
+    DB.contacts = ct.rows.map((r, i) => {
+      let nm = '';
+      if (m.fn || m.ln) nm = ((m.fn ? (r[m.fn]||'') : '') + ' ' + (m.ln ? (r[m.ln]||'') : '')).trim();
+      if (!nm && m.full) nm = String(r[m.full] == null ? '' : r[m.full]).trim();
+      return {
+        _i: i,
+        seqId  : m.seq ? String(r[m.seq] == null ? '' : r[m.seq]).trim() : '',
+        seqName: m.name ? String(r[m.name] == null ? '' : r[m.name]).trim() : '',
+        ts     : parseCivil(m.date ? r[m.date] : null),
+        rawDate: m.date ? (r[m.date] == null ? '' : String(r[m.date])) : '',
+        email  : m.email ? String(r[m.email] == null ? '' : r[m.email]).trim() : '',
+        cid    : m.cid ? String(r[m.cid] == null ? '' : r[m.cid]).trim() : '',
+        name   : nm,
+        company: m.co ? String(r[m.co] == null ? '' : r[m.co]).trim() : '',
+        title  : m.title ? String(r[m.title] == null ? '' : r[m.title]).trim() : '',
+        status : m.status ? String(r[m.status] == null ? '' : r[m.status]).trim() : '',
+        stepId : m.stepId ? String(r[m.stepId] == null ? '' : r[m.stepId]).trim() : '',
+        stepNm : m.stepNm ? String(r[m.stepNm] == null ? '' : r[m.stepNm]).trim() : ''
+      };
+    });
+  }
+
+  /* ---------- sequence label + owner on every fact row ----------
+     Owner = first name on the sequence name. ownerUserId is still joined from
+     All Sequences and kept on the row, but it identifies a shared licence seat
+     rather than a person, so it is reference data only. */
+  DB.ownerDerivation = {};                       // sequence name -> owner, for the audit table
+  [DB.emails, DB.contacts].forEach(list => list.forEach(r => {
+    const dim = DB.seqDim[r.seqId];
+    r.seqLabel = (dim && dim.name) || r.seqName || (r.seqId ? 'Sequence ' + r.seqId : 'Unknown sequence');
+    r.dimMatched = !!dim;
+    r.ownerId = (dim && dim.owner) ? String(dim.owner).trim() : '';
+    r.owner = ownerFromSequenceName(r.seqLabel);
+    if (!DB.ownerDerivation[r.seqLabel]) DB.ownerDerivation[r.seqLabel] = r.owner;
+  }));
+
+  /* ---------- first-email resolution ----------
+     Direct two-table join: Campaign Structure gives each sequence its first-email
+     step number, and an All Email Activities row is a first email when its
+     sequenceStepNumber equals that value. Resolved per sequence from the sheet —
+     step 1 is never assumed. */
+  DB.firstStep = {};
+  Object.entries(DB.campRaw).forEach(([id, c]) => { DB.firstStep[id] = c.idx; });
+
+  DB.emails.forEach(r => {
+    const fs = DB.firstStep[r.seqId];
+    r.firstStepKnown = fs != null;
+    r.isFirstEmail = (fs != null && r.step != null) ? (r.step === fs) : false;
+  });
+
+  /* ---------- data-quality tallies ---------- */
+  DB.dq.chart2 = {
+    total: DB.emails.length,
+    noDate: DB.emails.filter(r => r.ts == null).length,
+    badDate: DB.emails.filter(r => r.ts == null && r.rawDate.trim() !== '').length,
+    unmatchedSeq: DB.emails.filter(r => !r.dimMatched).length,
+    unmatchedSeqIds: [...new Set(DB.emails.filter(r => !r.dimMatched).map(r => r.seqId))],
+    noCampaign: DB.emails.filter(r => !r.firstStepKnown).length,
+    noCampaignIds: [...new Set(DB.emails.filter(r => !r.firstStepKnown).map(r => r.seqId))]
+  };
+  DB.dq.chart1 = {
+    total: DB.contacts.length,
+    noDate: DB.contacts.filter(r => r.ts == null).length,
+    badDate: DB.contacts.filter(r => r.ts == null && r.rawDate.trim() !== '').length,
+    unmatchedSeq: DB.contacts.filter(r => !r.dimMatched).length,
+    unmatchedSeqIds: [...new Set(DB.contacts.filter(r => !r.dimMatched).map(r => r.seqId))],
+    noKey: DB.contacts.filter(r => !dedupeKey(r)).length
+  };
+}
+
+/* Owner = the first name on the sequence name.
+   Takes the leading token, cuts it at the first separator so "Rishita.sv" -> Rishita
+   and "BHANU-Data-Center" -> BHANU, then title-cases it. An exact-name entry in
+   OWNER_FIXES wins over the first token. */
+function ownerFromSequenceName(name){
+  const s = String(name || '').trim();
+  if (!s) return 'Unknown';
+  const fix = OWNER_FIXES[s.toLowerCase()];
+  if (fix) return fix;
+  let tok = s.split(/[_\s]+/).filter(Boolean)[0] || s;
+  tok = tok.split('.')[0].split('-')[0].replace(/[^A-Za-z]/g, '');
+  if (!tok) return 'Unknown';
+  return titleCase(tok);
+}
+
+/* dedupe key: contact email (lowercased/trimmed), else contact ID */
+const dedupeKey = r => (r.email ? r.email.trim().toLowerCase() : (r.cid ? 'id:' + r.cid : ''));
+
+/* ===================================================================
+   5. Per-chart state (fully independent)
+   =================================================================== */
+function freshState(extra){
+  return Object.assign({
+    quick:'thisweek', from:null, to:null,
+    bucket:'auto', breakdown:'owner', stacked:false, hideEmpty:true,
+    seqSel:new Set(), ownSel:new Set()      // empty set == "all"
+  }, extra || {});
+}
+/* chart 1 is owner-only by design — it has no sequence breakdown control */
+const S1 = freshState({ unique:false });
+const S2 = freshState({ firstOnly:true });
+
+const QUICKS = [
+  { k:'yesterday', lab:'Yesterday' },
+  { k:'thisweek',  lab:'This week' },
+  { k:'lastweek',  lab:'Last week' },
+  { k:'thismonth', lab:'This month' },
+  { k:'lastmonth', lab:'Last month' },
+  { k:'today',     lab:'Today' },
+  { k:'last7',     lab:'Last 7 days' },
+  { k:'last30',    lab:'Last 30 days' },
+  { k:'all',       lab:'All time' },
+  { k:'custom',    lab:'Custom' }
+];
+
+/* returns {start,end} as inclusive civil day boundaries */
+function resolveRange(st, rows){
+  const today = startOfDay(istNow());
+  let start, end;
+  switch (st.quick){
+    case 'today':     start = today; end = today; break;
+    case 'yesterday': start = today - DAY; end = today - DAY; break;
+    case 'thisweek':  start = startOfWeek(today); end = today; break;
+    case 'lastweek':  start = startOfWeek(today) - 7*DAY; end = startOfWeek(today) - DAY; break;
+    case 'thismonth': start = startOfMonth(today); end = today; break;
+    case 'lastmonth': {
+      const firstThis = startOfMonth(today);
+      start = startOfMonth(firstThis - DAY); end = firstThis - DAY; break;
+    }
+    case 'last7':  start = today - 6*DAY;  end = today; break;
+    case 'last30': start = today - 29*DAY; end = today; break;
+    case 'all': {
+      const ts = rows.map(r => r.ts).filter(t => t != null);
+      if (!ts.length) { start = today; end = today; }
+      else { start = startOfDay(Math.min(...ts)); end = startOfDay(Math.max(...ts)); }
+      break;
+    }
+    case 'custom':
+      start = st.from != null ? st.from : today - 29*DAY;
+      end   = st.to   != null ? st.to   : today;
+      break;
+    default: start = today - 29*DAY; end = today;
+  }
+  if (start > end) { const t = start; start = end; end = t; }
+  return { start, end };
+}
+const rangeLabel = r => r.start === r.end ? fmtDay(r.start) : fmtDay(r.start) + ' → ' + fmtDay(r.end);
+
+function pickBucket(st, range){
+  if (st.bucket !== 'auto') return st.bucket;
+  const days = Math.round((range.end - range.start) / DAY) + 1;
+  if (days <= 31)  return 'day';
+  if (days <= 210) return 'week';
+  return 'month';
+}
+const bucketStart = (t, b) => b === 'day' ? startOfDay(t) : b === 'week' ? startOfWeek(t) : startOfMonth(t);
+const bucketLabel = (t, b) => b === 'day' ? fmtDay(t) : b === 'week' ? 'wk ' + fmtDay(t) : fmtMonth(t);
+function bucketAxisLabel(b){
+  return b === 'day' ? 'Day' : b === 'week' ? 'Week (Mon-start)' : 'Month';
+}
+function enumerateBuckets(range, b){
+  const out = [];
+  let t = bucketStart(range.start, b);
+  const guard = 2000;
+  while (t <= range.end && out.length < guard){
+    out.push(t);
+    t = b === 'day' ? t + DAY
+      : b === 'week' ? t + 7*DAY
+      : Date.UTC(cY(t), cM(t) + 1, 1);
+  }
+  return out;
+}
+
+/* ===================================================================
+   6. Filtering + aggregation
+   =================================================================== */
+function baseFilter(rows, st, range){
+  const seqAll = st.seqSel.size === 0, ownAll = st.ownSel.size === 0;
+  return rows.filter(r => {
+    if (r.ts == null) return false;
+    const d = startOfDay(r.ts);
+    if (d < range.start || d > range.end) return false;
+    if (!seqAll && !st.seqSel.has(r.seqLabel)) return false;
+    if (!ownAll && !st.ownSel.has(r.owner)) return false;
+    return true;
+  });
+}
+
+/* chart 2 also filters on the first-email join */
+function filterEmails(st, range){
+  const rows = baseFilter(DB.emails, st, range);
+  return st.firstOnly ? rows.filter(r => r.isFirstEmail) : rows;
+}
+
+/* chart 1: when deduped, keep one row per contact = earliest addingDate in range.
+   That single row carries the owner/sequence attribution, so stacked segments
+   always sum exactly to the unique-contact headline. */
+function filterContacts(st, range){
+  const rows = baseFilter(DB.contacts, st, range);
+  if (!st.unique) return { units: rows, enrollments: rows.length, unique: countUnique(rows), all: rows };
+  const best = new Map();
+  rows.forEach(r => {
+    const k = dedupeKey(r) || ('row:' + r._i);
+    const cur = best.get(k);
+    if (!cur || r.ts < cur.ts) best.set(k, r);
+  });
+  const seqCount = new Map();
+  rows.forEach(r => {
+    const k = dedupeKey(r) || ('row:' + r._i);
+    if (!seqCount.has(k)) seqCount.set(k, new Set());
+    seqCount.get(k).add(r.seqLabel);
+  });
+  const units = [...best.values()].map(r => Object.assign({}, r, {
+    _dedupeKey: dedupeKey(r) || ('row:' + r._i),
+    _seqCount: seqCount.get(dedupeKey(r) || ('row:' + r._i)).size,
+    _seqList: [...seqCount.get(dedupeKey(r) || ('row:' + r._i))].sort().join(' | ')
+  }));
+  return { units, enrollments: rows.length, unique: units.length, all: rows };
+}
+function countUnique(rows){
+  const s = new Set();
+  rows.forEach(r => s.add(dedupeKey(r) || ('row:' + r._i)));
+  return s.size;
+}
+
+/* group units into buckets x series, collapsing the long tail into "Other" */
+function aggregate(units, st, range, bucket){
+  const buckets = enumerateBuckets(range, bucket);
+  const idxOf = new Map(buckets.map((t, i) => [t, i]));
+  const keyOf = r => st.breakdown === 'owner' ? (r.owner || 'Unknown') : (r.seqLabel || 'Unknown');
+
+  const totals = new Map();
+  units.forEach(r => totals.set(keyOf(r), (totals.get(keyOf(r)) || 0) + 1));
+  const ordered = [...totals.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
+  const keep = ordered.slice(0, MAX_SERIES).map(e => e[0]);
+  const tail = ordered.slice(MAX_SERIES).map(e => e[0]);
+  const keepSet = new Set(keep);
+  const series = keep.slice();
+  if (tail.length) series.push('Other (' + tail.length + ')');
+  const otherName = tail.length ? series[series.length - 1] : null;
+
+  const grid = series.map(() => buckets.map(() => 0));
+  const rowsAt = series.map(() => buckets.map(() => []));
+  units.forEach(r => {
+    const bi = idxOf.get(bucketStart(r.ts, bucket));
+    if (bi == null) return;
+    const k = keyOf(r);
+    const si = keepSet.has(k) ? series.indexOf(k) : series.length - 1;
+    if (si < 0) return;
+    grid[si][bi]++; rowsAt[si][bi].push(r);
+  });
+
+  /* Buckets with no activity at all (weekends, holidays) are dropped by default so
+     the active days get the full width. Chart.js category scales give every
+     category equal width, so a zero-activity day cannot merely be made narrow —
+     it either occupies a full slot or none. The dropped dates are listed under
+     the chart and the "Empty days" control brings them back. */
+  let emptyLabels = [];
+  if (st.hideEmpty !== false){
+    const keepIdx = buckets.map((_, i) => i).filter(i => grid.some(row => row[i] > 0));
+    if (keepIdx.length && keepIdx.length < buckets.length){
+      emptyLabels = buckets.filter((_, i) => !keepIdx.includes(i)).map(t => bucketLabel(t, bucket));
+      return {
+        buckets: keepIdx.map(i => buckets[i]),
+        series,
+        grid:   grid.map(row => keepIdx.map(i => row[i])),
+        rowsAt: rowsAt.map(row => keepIdx.map(i => row[i])),
+        tailKeys: tail, otherName, hiddenCount: tail.length, emptyLabels
+      };
+    }
+  }
+  return { buckets, series, grid, rowsAt, tailKeys: tail, otherName, hiddenCount: tail.length, emptyLabels };
+}
+
+/* ===================================================================
+   7. UI building blocks
+   =================================================================== */
+function segControl(el, opts, get, set){
+  el.innerHTML = '';
+  opts.forEach(o => {
+    const b = document.createElement('button');
+    b.textContent = o.lab; b.dataset.k = o.k;
+    if (get() === o.k) b.className = 'on';
+    b.onclick = () => { set(o.k); };
+    el.appendChild(b);
+  });
+}
+function quickControl(el, st, onChange){
+  el.innerHTML = '';
+  QUICKS.forEach(q => {
+    const b = document.createElement('button');
+    b.className = 'chipbtn' + (st.quick === q.k ? ' on' : '');
+    b.textContent = q.lab;
+    b.onclick = () => { st.quick = q.k; onChange(); };
+    el.appendChild(b);
+  });
+}
+
+/* searchable multi-select; empty selection == all */
+function makeMulti(host, label, sel, onChange){
+  host.innerHTML =
+    '<button class="ms-btn" type="button"><span class="lbl"></span><span class="car">▼</span></button>' +
+    '<div class="ms-pop">' +
+      '<input type="text" placeholder="Search ' + esc(label) + '…">' +
+      '<div class="ms-acts"><button type="button" data-a="all">Select all</button>' +
+      '<button type="button" data-a="none">Clear</button></div>' +
+      '<div class="ms-list"></div>' +
+    '</div>';
+  const btn = host.querySelector('.ms-btn'), pop = host.querySelector('.ms-pop'),
+        search = host.querySelector('input[type=text]'), list = host.querySelector('.ms-list'),
+        lbl = host.querySelector('.lbl');
+  let options = [];
+
+  const syncLabel = () => {
+    lbl.textContent = sel.size === 0 ? 'All ' + label + 's'
+                    : sel.size === 1 ? [...sel][0]
+                    : sel.size + ' ' + label + 's selected';
+    lbl.title = lbl.textContent;
+    btn.classList.toggle('active', sel.size > 0);
+  };
+  const paint = () => {
+    const q = search.value.trim().toLowerCase();
+    const vis = options.filter(o => !q || o.k.toLowerCase().includes(q));
+    if (!vis.length){ list.innerHTML = '<div class="ms-empty">No matches</div>'; return; }
+    list.innerHTML = vis.map(o =>
+      '<label><input type="checkbox" data-k="' + esc(o.k) + '"' + (sel.has(o.k) ? ' checked' : '') + '>' +
+      '<span class="nm" title="' + esc(o.k) + '">' + esc(o.k) + '</span>' +
+      '<span class="ct">' + nf(o.n) + '</span></label>').join('');
+    list.querySelectorAll('input').forEach(cb => cb.onchange = () => {
+      cb.checked ? sel.add(cb.dataset.k) : sel.delete(cb.dataset.k);
+      syncLabel(); onChange();
+    });
+  };
+  btn.onclick = e => {
+    e.stopPropagation();
+    document.querySelectorAll('.ms-pop.open').forEach(p => { if (p !== pop) p.classList.remove('open'); });
+    pop.classList.toggle('open');
+    if (pop.classList.contains('open')) { search.value = ''; paint(); search.focus(); }
+  };
+  pop.onclick = e => e.stopPropagation();
+  search.oninput = paint;
+  host.querySelector('[data-a=all]').onclick  = () => { options.forEach(o => sel.add(o.k)); syncLabel(); paint(); onChange(); };
+  host.querySelector('[data-a=none]').onclick = () => { sel.clear(); syncLabel(); paint(); onChange(); };
+
+  return {
+    setOptions(list_){
+      options = list_;
+      const valid = new Set(options.map(o => o.k));
+      [...sel].forEach(k => { if (!valid.has(k)) sel.delete(k); });   // drop stale picks
+      syncLabel();
+      if (pop.classList.contains('open')) paint();
+    }
+  };
+}
+document.addEventListener('click', () => document.querySelectorAll('.ms-pop.open').forEach(p => p.classList.remove('open')));
+
+function kpiBlock(label, value, sub, delta){
+  let d = '';
+  if (delta){
+    const cls = delta.pct == null ? 'flat' : delta.pct > 0 ? 'up' : delta.pct < 0 ? 'dn' : 'flat';
+    const ar  = delta.pct == null ? '' : delta.pct > 0 ? '▲ ' : delta.pct < 0 ? '▼ ' : '● ';
+    const txt = delta.pct == null ? 'no prior-period baseline'
+              : (delta.pct > 0 ? '+' : '') + delta.pct.toFixed(1) + '% vs prev.';
+    d = '<div class="delta ' + cls + '">' + ar + esc(txt) + '</div>' +
+        '<div class="k-sub">prev: ' + nf(delta.prev) + ' · ' + esc(delta.label) + '</div>';
+  }
+  return '<div class="kpi"><div class="k-lab">' + esc(label) + '</div>' +
+         '<div class="k-val">' + (typeof value === 'number' ? nf(value) : esc(value)) + '</div>' +
+         (sub ? '<div class="k-sub">' + esc(sub) + '</div>' : '') + d + '</div>';
+}
+function prevRange(range){
+  const span = Math.round((range.end - range.start) / DAY) + 1;
+  return { start: range.start - span*DAY, end: range.start - DAY, span };
+}
+function deltaOf(cur, prev, label){
+  const pct = prev > 0 ? ((cur - prev) / prev) * 100 : (cur > 0 ? null : 0);
+  return { pct: prev === 0 && cur === 0 ? 0 : pct, prev, label };
+}
+
+function chipRow(host, items){
+  host.innerHTML = '<span class="lb">Active filters</span>' +
+    items.map(i => '<span class="chip' + (i.neutral ? ' n' : '') + '">' + esc(i.t) + '</span>').join('');
+}
+
+function overlay(el, kind, title, msg){
+  if (!kind){ el.classList.remove('show'); el.innerHTML = ''; return; }
+  el.innerHTML = (kind === 'loading' ? '<div class="spin"></div>' : '') +
+                 '<div class="ttl">' + esc(title) + '</div><div class="msg">' + msg + '</div>';
+  el.classList.add('show');
+}
+
+function setStatus(kind, text){
+  const dot = $('statusDot');
+  dot.className = 'dot' + (kind === 'busy' ? ' busy' : kind === 'bad' ? ' bad' : '');
+  if (text) $('nextTick').textContent = text;
+}
+
+/* ===================================================================
+   8. Chart rendering
+   =================================================================== */
+/* alternating shaded bands, one per category, so adjacent days/groups are easy to
+   tell apart when several owner bars sit side by side */
+const altBands = {
+  id:'altBands',
+  beforeDatasetsDraw(chart){
+    const x = chart.scales.x;
+    if (!x) return;
+    const n = chart.data.labels.length;
+    if (!n) return;
+    const { ctx, chartArea } = chart;
+    const w = x.width / n;
+    ctx.save();
+    for (let i = 0; i < n; i++){
+      if (i % 2 === 0) continue;                       // shade every other category
+      const c = x.getPixelForTick ? x.getPixelForTick(i) : x.getPixelForValue(i);
+      ctx.fillStyle = 'rgba(16,24,40,0.045)';
+      ctx.fillRect(c - w/2, chartArea.top, w, chartArea.bottom - chartArea.top);
+    }
+    /* thin separators on every category boundary */
+    ctx.strokeStyle = 'rgba(16,24,40,0.10)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= n; i++){
+      const edge = x.left + i * w;
+      ctx.beginPath();
+      ctx.moveTo(edge, chartArea.top); ctx.lineTo(edge, chartArea.bottom); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+Chart.register(altBands);
+
+const stackTotals = {
+  id:'stackTotals',
+  afterDatasetsDraw(chart){
+    if (!chart.$showTotals) return;
+    const ctx = chart.ctx;
+    const n = chart.data.labels.length;
+    for (let i = 0; i < n; i++){
+      let sum = 0, top = Infinity, x = null;
+      chart.data.datasets.forEach((ds, di) => {
+        if (!chart.isDatasetVisible(di)) return;
+        const el = chart.getDatasetMeta(di).data[i];
+        if (!el) return;
+        const v = Number(ds.data[i]) || 0;
+        sum += v;
+        if (v > 0) top = Math.min(top, el.y);
+        x = el.x;
+      });
+      if (sum > 0 && x != null && top < Infinity){
+        ctx.save();
+        ctx.font = '700 11.5px ' + Chart.defaults.font.family;
+        ctx.fillStyle = '#101828'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText(nf(sum), x, top - 5);
+        ctx.restore();
+      }
+    }
+  }
+};
+Chart.register(stackTotals);
+
+/* How much of the plot height this bar/segment occupies, as a 0..1 fraction.
+   Deliberately derived from the data and the y-axis max rather than from element
+   pixels: chartjs-plugin-datalabels resolves scriptable options once, before the
+   bar-grow animation has run, so reading element geometry there yields ~0. */
+function frac(c){
+  const max = (c.chart.scales.y && c.chart.scales.y.max) || 0;
+  if (!max) return 0;
+  return (Number(c.dataset.data[c.dataIndex]) || 0) / max;
+}
+const FITS_INSIDE = 0.17;          // ~17% of plot height is enough for a rotated label
+const shortSeries = s => { s = String(s == null ? '' : s); return s.length > 24 ? s.slice(0,23) + '…' : s; };
+
+const CHARTS = {};
+function drawChart(canvasId, agg, bucket, stacked, metricLabel, onClick){
+  const ctx = $(canvasId);
+  if (CHARTS[canvasId]) CHARTS[canvasId].destroy();
+
+  const datasets = agg.series.map((name, si) => ({
+    label: name,
+    data: agg.grid[si],
+    backgroundColor: name.startsWith('Other (') ? '#98a2b3' : PALETTE[si % PALETTE.length],
+    borderRadius: 3,
+    borderSkipped: false,
+    maxBarThickness: stacked ? 54 : 26
+  }));
+
+  CHARTS[canvasId] = new Chart(ctx, {
+    type:'bar',
+    data:{ labels: agg.buckets.map(t => bucketLabel(t, bucket)), datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      animation:{ duration:250 },
+      interaction:{ mode:'nearest', intersect:true },
+      onClick(evt, els){
+        if (!els.length) return;
+        const e = els[0];
+        onClick(e.datasetIndex, e.index);
+      },
+      onHover(e, els){ e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      scales:{
+        x:{
+          stacked,
+          title:{ display:true, text: bucketAxisLabel(bucket) + ' (IST)', font:{ size:11.5, weight:'600' }, color:'#98a2b3' },
+          grid:{ display:false },
+          ticks:{ font:{ size:11 }, maxRotation: agg.buckets.length > 14 ? 55 : 0, autoSkip:false }
+        },
+        y:{
+          stacked, beginAtZero:true, grace:'16%',   // headroom for the on-bar name labels
+          title:{ display:true, text: metricLabel, font:{ size:11.5, weight:'600' }, color:'#98a2b3' },
+          grid:{ color:'#f0f2f5' },
+          ticks:{ precision:0, font:{ size:11 } }
+        }
+      },
+      plugins:{
+        legend:{ position:'top', align:'start',
+          labels:{ boxWidth:10, boxHeight:10, usePointStyle:true, pointStyle:'circle', font:{ size:11.5 }, padding:12 } },
+        tooltip:{
+          callbacks:{
+            title: it => it[0].label,
+            label: c => c.dataset.label + ': ' + nf(c.parsed.y) + ' ' + metricLabel.toLowerCase(),
+            footer(it){
+              const tot = it[0].chart.data.datasets.reduce((s, ds, di) =>
+                s + (it[0].chart.isDatasetVisible(di) ? (Number(ds.data[it[0].dataIndex]) || 0) : 0), 0);
+              return 'Bucket total: ' + nf(tot) + '  ·  click to drill down';
+            }
+          }
+        },
+        datalabels:{
+          labels:{
+            /* the count */
+            value:{
+              color: stacked ? '#fff' : '#344054',
+              anchor: stacked ? 'center' : 'end',
+              align:  stacked ? 'center' : 'top',
+              offset: stacked ? 0 : 2,
+              font:{ size:10, weight:'700' },
+              formatter: v => (v ? nf(v) : ''),
+              display(c){
+                const v = Number(c.dataset.data[c.dataIndex]) || 0;
+                if (!v) return false;
+                if (!stacked) return true;
+                return frac(c) >= 0.045;                       // hide in slivers
+              }
+            },
+            /* the series name (owner / sequence) written on the bar itself, rotated
+               so it stays legible on narrow grouped bars */
+            name:{
+              rotation:-90,
+              font:{ size:9.5, weight:'600' },
+              formatter:(v, c) => v ? shortSeries(c.dataset.label) : '',
+              anchor: c => frac(c) >= FITS_INSIDE ? 'center' : 'end',
+              align:  c => frac(c) >= FITS_INSIDE ? 'center' : 'top',
+              offset: c => frac(c) >= FITS_INSIDE ? 0 : 22,
+              color:  c => frac(c) >= FITS_INSIDE ? '#fff' : '#667085',
+              display(c){
+                const v = Number(c.dataset.data[c.dataIndex]) || 0;
+                if (!v) return false;
+                /* in stacked mode only label segments with room inside */
+                return stacked ? frac(c) >= FITS_INSIDE : true;
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+  CHARTS[canvasId].$showTotals = stacked;
+}
+
+/* ===================================================================
+   9. Drill-down modal
+   =================================================================== */
+let MODAL = { rows:[], cols:[], sortIdx:null, sortDir:1, title:'', sub:'' };
+
+function openDrill(title, sub, cols, rows){
+  MODAL = { rows, cols, sortIdx:null, sortDir:1, title, sub };
+  $('mTitle').textContent = title;
+  $('mSub').textContent = sub;
+  paintModal();
+  $('modal').classList.add('open');
+}
+function paintModal(){
+  const { rows, cols } = MODAL;
+  let data = rows.slice();
+  if (MODAL.sortIdx != null){
+    const c = cols[MODAL.sortIdx];
+    data.sort((a, b) => {
+      let x = c.get(a), y = c.get(b);
+      if (c.num){ x = Number(x) || 0; y = Number(y) || 0; return (x - y) * MODAL.sortDir; }
+      x = String(x == null ? '' : x).toLowerCase(); y = String(y == null ? '' : y).toLowerCase();
+      return x < y ? -MODAL.sortDir : x > y ? MODAL.sortDir : 0;
+    });
+  }
+  const head = '<thead><tr>' + cols.map((c, i) =>
+    '<th data-i="' + i + '">' + esc(c.h) +
+    (MODAL.sortIdx === i ? '<span class="ar">' + (MODAL.sortDir === 1 ? '▲' : '▼') + '</span>' : '') +
+    '</th>').join('') + '</tr></thead>';
+  const CAP = 3000;
+  const body = '<tbody>' + data.slice(0, CAP).map(r =>
+    '<tr>' + cols.map(c => {
+      const v = c.get(r);
+      if (c.bool) return '<td>' + (v === true ? '<span class="pill y">Yes</span>'
+                                : v === false ? '<span class="pill n">No</span>' : '—') + '</td>';
+      return '<td class="' + (c.num ? 'num' : '') + '" title="' + esc(v) + '">' + esc(v) + '</td>';
+    }).join('') + '</tr>').join('') + '</tbody>';
+  $('mTbl').innerHTML = head + body;
+  $('mTbl').querySelectorAll('th').forEach(th => th.onclick = () => {
+    const i = +th.dataset.i;
+    if (MODAL.sortIdx === i) MODAL.sortDir *= -1; else { MODAL.sortIdx = i; MODAL.sortDir = 1; }
+    paintModal();
+  });
+  $('mFoot').textContent = nf(rows.length) + ' row' + (rows.length === 1 ? '' : 's') +
+    (rows.length > CAP ? ' · showing first ' + nf(CAP) + ' (CSV export includes all)' : '') +
+    ' · click a column header to sort';
+}
+$('mClose').onclick = () => $('modal').classList.remove('open');
+$('modal').onclick = e => { if (e.target === $('modal')) $('modal').classList.remove('open'); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('modal').classList.remove('open'); });
+$('mCsv').onclick = () => {
+  const { rows, cols, title } = MODAL;
+  const q = v => { const s = String(v == null ? '' : (v === true ? 'Yes' : v === false ? 'No' : v));
+                   return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; };
+  const csv = [cols.map(c => q(c.h)).join(',')]
+    .concat(rows.map(r => cols.map(c => q(c.get(r))).join(','))).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8' }));
+  a.download = title.replace(/[^\w]+/g,'_').replace(/^_|_$/g,'').slice(0,80) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+};
+
+/* column sets */
+const COLS_C1_ENROL = [
+  { h:'Contact', get:r => r.name },
+  { h:'Email',   get:r => r.email },
+  { h:'Company', get:r => r.company },
+  { h:'Title',   get:r => r.title },
+  { h:'Sequence',get:r => r.seqLabel },
+  { h:'Owner',   get:r => r.owner },
+  { h:'ownerUserId (shared seat)', get:r => r.ownerId },
+  { h:'Sequence ID', get:r => r.seqId },
+  { h:'Contact ID',  get:r => r.cid },
+  { h:'Status',  get:r => r.status },
+  { h:'Adding date (IST)', get:r => fmtDateTime(r.ts) }
+];
+const COLS_C1_UNIQ = [
+  { h:'Contact', get:r => r.name },
+  { h:'Email',   get:r => r.email },
+  { h:'Company', get:r => r.company },
+  { h:'# Sequences', get:r => r._seqCount, num:true },
+  { h:'Sequences (all in range)', get:r => r._seqList },
+  { h:'Attributed sequence', get:r => r.seqLabel },
+  { h:'Attributed owner',    get:r => r.owner },
+  { h:'ownerUserId (shared seat)', get:r => r.ownerId },
+  { h:'Contact ID', get:r => r.cid },
+  { h:'Earliest adding date (IST)', get:r => fmtDateTime(r.ts) }
+];
+const COLS_C2 = [
+  { h:'Contact', get:r => r.name },
+  { h:'Email',   get:r => r.email },
+  { h:'Company', get:r => r.company },
+  { h:'Sequence',get:r => r.seqLabel },
+  { h:'Owner',   get:r => r.owner },
+  { h:'ownerUserId (shared seat)', get:r => r.ownerId },
+  { h:'Sending mailbox', get:r => r.mailbox },
+  { h:'sequenceStepNumber',  get:r => r.step, num:true },
+  { h:'sequenceStepDisplayName', get:r => r.stepDisp, num:true },
+  { h:'First-email step (Campaign Structure)', get:r => DB.firstStep[r.seqId] == null ? 'unknown' : DB.firstStep[r.seqId], num:false },
+  { h:'Is first email', get:r => r.isFirstEmail, bool:true },
+  { h:'Delivery date (IST)', get:r => fmtDateTime(r.ts) },
+  { h:'Delivered', get:r => r.delivered, bool:true },
+  { h:'Opened',    get:r => r.opened, bool:true },
+  { h:'Clicked',   get:r => r.clicked, bool:true },
+  { h:'Bounced',   get:r => r.bounced, bool:true },
+  { h:'Replied',   get:r => r.replied, bool:true },
+  { h:'Sequence ID', get:r => r.seqId }
+];
+
+/* ===================================================================
+   10. Chart 1 render
+   =================================================================== */
+function renderChart1(){
+  const st = S1, ov = $('ov1');
+  const range = resolveRange(st, DB.contacts);
+  $('from1').value = iso(range.start); $('to1').value = iso(range.end);
+
+  /* option lists reflect everything available, not the current filter */
+  ms1seq.setOptions(optionCounts(DB.contacts, r => r.seqLabel));
+  ms1own.setOptions(optionCounts(DB.contacts, r => r.owner));
+
+  const bucket = pickBucket(st, range);
+  $('ax1').textContent = bucketAxisLabel(bucket);
+  const metric = st.unique ? 'Unique contacts' : 'Enrollments';
+  $('ay1').textContent = metric;
+
+  const cur  = filterContacts(st, range);
+  const pr   = prevRange(range);
+  const prev = filterContacts(st, pr);
+
+  $('kpi1').innerHTML =
+    kpiBlock(metric + ' in range', st.unique ? cur.unique : cur.enrollments,
+             rangeLabel(range),
+             deltaOf(st.unique ? cur.unique : cur.enrollments,
+                     st.unique ? prev.unique : prev.enrollments, rangeLabel(pr))) +
+    kpiBlock('Enrollments', cur.enrollments, 'every contact-in-sequence row') +
+    kpiBlock('Unique contacts', cur.unique, 'distinct contacts (' + (DB.contacts.length && DB.contacts.some(r=>r.email) ? 'by email' : 'by contact ID') + ')') +
+    kpiBlock('Duplication gap', cur.enrollments - cur.unique,
+             cur.unique ? (cur.enrollments / cur.unique).toFixed(2) + ' sequences per contact avg.' : '—') +
+    kpiBlock('Sequences · Owners',
+             new Set(cur.all.map(r => r.seqLabel)).size + ' · ' + new Set(cur.all.map(r => r.owner)).size,
+             'represented in range');
+
+  chipRow($('chips1'), [
+    { t:'Range: ' + rangeLabel(range) },
+    { t:'Bucket: ' + bucketAxisLabel(bucket) + (st.bucket === 'auto' ? ' (auto)' : ''), neutral:true },
+    { t:'Sequence: ' + (st.seqSel.size ? st.seqSel.size + ' selected' : 'all'), neutral: !st.seqSel.size },
+    { t:'Owner: ' + (st.ownSel.size ? [...st.ownSel].join(', ') : 'all'), neutral: !st.ownSel.size },
+    { t: st.unique ? 'Unique contacts only' : 'Counting every enrollment', neutral: !st.unique }
+  ]);
+
+  renderNotice1();
+
+  /* states */
+  if (!DB.loaded && DB.loading){ overlay(ov, 'loading', 'Loading sequence enrolments…', 'Reading <code>' + esc(TABS.contacts.name) + '</code> from the sheet.'); return; }
+  if (DB.error){ overlay(ov, 'err', 'Could not load the sheet', esc(DB.error)); return; }
+  if (DB.contactRawRows === 0){
+    overlay(ov, 'empty', 'Source tab is empty',
+      'The tab <code>' + esc(TABS.contacts.name) + '</code> currently contains <b>no rows and no header</b> ' +
+      '(a single blank cell). There is nothing to count yet.<br><br>' +
+      'This chart is fully wired and will populate <b>automatically on the next refresh</b> once the tab is filled — ' +
+      'columns are matched by name, so no code change is needed.');
+    if (CHARTS.cv1){ CHARTS.cv1.destroy(); delete CHARTS.cv1; }
+    return;
+  }
+  if (!cur.units.length){
+    overlay(ov, 'empty', 'No contacts added in this range',
+      'No rows in <code>' + esc(TABS.contacts.name) + '</code> match the current filters. Widen the date range or clear a filter.');
+    if (CHARTS.cv1){ CHARTS.cv1.destroy(); delete CHARTS.cv1; }
+    return;
+  }
+  overlay(ov, null);
+
+  const agg = aggregate(cur.units, st, range, bucket);
+  noteGaps($('gap1'), agg, bucket);
+  drawChart('cv1', agg, bucket, st.stacked, metric, (di, bi) => {
+    const rows = agg.rowsAt[di][bi];
+    const seriesName = agg.series[di];
+    const cols = st.unique ? COLS_C1_UNIQ : COLS_C1_ENROL;
+    openDrill(
+      metric + ' — ' + seriesName + ' — ' + bucketLabel(agg.buckets[bi], bucket),
+      (st.unique
+        ? 'One row per unique contact, attributed to its earliest addingDate in range. '
+        : 'One row per contact-in-sequence enrollment. ') +
+      'Breakdown: ' + (st.breakdown === 'owner' ? 'owner' : 'sequence') + ' = ' + seriesName +
+      ' · ' + bucketAxisLabel(bucket) + ' ' + bucketLabel(agg.buckets[bi], bucket) + ' (IST)',
+      cols, rows);
+  });
+}
+
+/* footnote listing the zero-activity buckets that were dropped from the axis */
+function noteGaps(el, agg, bucket){
+  if (!el) return;
+  const n = (agg.emptyLabels || []).length;
+  if (!n){ el.textContent = ''; el.title = ''; return; }
+  const unit = bucket === 'day' ? 'day' : bucket === 'week' ? 'week' : 'month';
+  el.innerHTML = ' · <b>' + nf(n) + '</b> empty ' + unit + (n === 1 ? '' : 's') +
+                 ' hidden <span style="opacity:.7">(' +
+                 esc(agg.emptyLabels.slice(0,4).join(', ')) + (n > 4 ? ', …' : '') + ')</span>';
+  el.title = agg.emptyLabels.join(', ');
+}
+
+function optionCounts(rows, keyFn){
+  const m = new Map();
+  rows.forEach(r => { const k = keyFn(r) || 'Unknown'; m.set(k, (m.get(k) || 0) + 1); });
+  return [...m.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
+                         .map(([k, n]) => ({ k, n }));
+}
+
+/* Collapsed-by-default data-quality panel. Open/closed state is kept per host id
+   so a filter change or the 60s refresh never snaps it shut again. */
+const NOTICE_OPEN = {};
+/* which diagnostics sections the user has opened; survives re-render + refresh */
+const DIAG_OPEN = { ownerMap:false };
+/* The diagnostics card is for whoever maintains the sheet, not for readers of the
+   dashboard, so it stays hidden behind the footer link. */
+let DIAG_VISIBLE = false;
+function paintNotice(host, items){
+  if (!items.length){ host.innerHTML = ''; return; }
+  const open = !!NOTICE_OPEN[host.id];
+  host.innerHTML =
+    '<details class="notice warn"' + (open ? ' open' : '') + '>' +
+      '<summary><span class="cv">&#9654;</span>Data quality &amp; join notes' +
+      '<span class="tw">' + items.length + '</span></summary>' +
+      '<div class="body"><ul>' + items.map(x => '<li>' + x + '</li>').join('') + '</ul></div>' +
+    '</details>';
+  host.querySelector('details').addEventListener('toggle', e => {
+    NOTICE_OPEN[host.id] = e.target.open;
+  });
+}
+
+function renderNotice1(){
+  const d = DB.dq.chart1, host = $('notice1');
+  if (!DB.loaded){ host.innerHTML = ''; return; }
+  const li = [];
+  if (DB.contactRawRows === 0){
+    li.push('Source tab <b>' + esc(TABS.contacts.name) + '</b> is <b>empty</b> — 0 rows, no header row. This chart has no data to show.');
+  } else {
+    if (d.badDate)      li.push('<b>' + nf(d.badDate) + '</b> row(s) dropped: <code>addingDate</code> present but unparseable.');
+    if (d.noDate - d.badDate > 0) li.push('<b>' + nf(d.noDate - d.badDate) + '</b> row(s) dropped: <code>addingDate</code> blank.');
+    if (d.unmatchedSeq) li.push('<b>' + nf(d.unmatchedSeq) + '</b> row(s) have a sequenceId not found in <b>' + esc(TABS.sequences.name) +
+      '</b> (' + d.unmatchedSeqIds.length + ' distinct id' + (d.unmatchedSeqIds.length === 1 ? '' : 's') +
+      '). These are <b>kept</b>, labelled from the row\'s own sequence name.');
+    if (d.noKey) li.push('<b>' + nf(d.noKey) + '</b> row(s) have neither email nor contact ID — deduped by row position.');
+  }
+  li.push('Owner = the <b>first name on the sequence name</b> (<code>Rahul_US_Direct_July</code> → <b>Rahul</b>). ' +
+    '<code>ownerUserId</code> from <b>' + esc(TABS.sequences.name) + '</b> is not used to label owners because licence ' +
+    'seats are shared — ' + nf(new Set(DB.emails.concat(DB.contacts).map(r => r.ownerId).filter(Boolean)).size) +
+    ' ids cover ' + nf(new Set(DB.emails.concat(DB.contacts).map(r => r.owner)).size) + ' people. The raw id is on every ' +
+    'drill-down row and in every export.');
+  paintNotice(host, li);
+}
+
+/* ===================================================================
+   11. Chart 2 render
+   =================================================================== */
+function renderChart2(){
+  const st = S2, ov = $('ov2');
+  const range = resolveRange(st, DB.emails);
+  $('from2').value = iso(range.start); $('to2').value = iso(range.end);
+
+  ms2seq.setOptions(optionCounts(DB.emails, r => r.seqLabel));
+  ms2own.setOptions(optionCounts(DB.emails, r => r.owner));
+
+  const bucket = pickBucket(st, range);
+  $('ax2').textContent = bucketAxisLabel(bucket);
+  const metric = st.firstOnly ? 'First emails sent' : 'Emails sent';
+  $('ay2').textContent = metric;
+
+  const rows = filterEmails(st, range);
+  const pr = prevRange(range);
+  const prevRows = filterEmails(st, pr);
+
+  const allInRange = baseFilter(DB.emails, st, range);
+  const firstInRange = allInRange.filter(r => r.isFirstEmail);
+
+  $('kpi2').innerHTML =
+    kpiBlock(metric + ' in range', rows.length, rangeLabel(range),
+             deltaOf(rows.length, prevRows.length, rangeLabel(pr))) +
+    kpiBlock('All emails', allInRange.length, 'every send row in range') +
+    kpiBlock('First emails', firstInRange.length, 'step matches Campaign Structure') +
+    kpiBlock('Delivered', rows.filter(r => r.delivered === true).length,
+             rows.length ? Math.round(rows.filter(r => r.delivered === true).length / rows.length * 100) + '% of counted' : '—') +
+    kpiBlock('Opened', rows.filter(r => r.opened === true).length,
+             rows.length ? Math.round(rows.filter(r => r.opened === true).length / rows.length * 100) + '% of counted' : '—') +
+    kpiBlock('Sequences · Owners',
+             new Set(rows.map(r => r.seqLabel)).size + ' · ' + new Set(rows.map(r => r.owner)).size,
+             'represented in range');
+
+  renderNotice2();
+
+  if (!DB.loaded && DB.loading){ overlay(ov, 'loading', 'Loading email activity…', 'Reading <code>' + esc(TABS.emails.name) + '</code> from the sheet.'); return; }
+  if (DB.error){ overlay(ov, 'err', 'Could not load the sheet', esc(DB.error)); return; }
+  if (DB.emailRawRows === 0){
+    overlay(ov, 'empty', 'Source tab is empty', 'The tab <code>' + esc(TABS.emails.name) + '</code> returned no rows.');
+    if (CHARTS.cv2){ CHARTS.cv2.destroy(); delete CHARTS.cv2; }
+    return;
+  }
+  if (!rows.length){
+    const span = DB.emails.map(r => r.ts).filter(t => t != null);
+    const hint = span.length
+      ? ' The data currently spans <b>' + esc(fmtDay(Math.min(...span))) + '</b> to <b>' + esc(fmtDay(Math.max(...span))) + '</b> (IST).'
+      : '';
+    overlay(ov, 'empty', 'No emails sent in this range',
+      'No rows in <code>' + esc(TABS.emails.name) + '</code> match the current filters.' + hint +
+      ' Try <b>All time</b>, or clear the first-email / sequence / owner filters.');
+    if (CHARTS.cv2){ CHARTS.cv2.destroy(); delete CHARTS.cv2; }
+    return;
+  }
+  overlay(ov, null);
+
+  const agg = aggregate(rows, st, range, bucket);
+  noteGaps($('gap2'), agg, bucket);
+  drawChart('cv2', agg, bucket, st.stacked, metric, (di, bi) => {
+    const drows = agg.rowsAt[di][bi];
+    const seriesName = agg.series[di];
+    openDrill(
+      metric + ' — ' + seriesName + ' — ' + bucketLabel(agg.buckets[bi], bucket),
+      (st.firstOnly ? 'First email of each sequence only (step matched against Campaign Structure). '
+                    : 'All email sends. ') +
+      'Breakdown: ' + (st.breakdown === 'owner' ? 'owner' : 'sequence') + ' = ' + seriesName +
+      ' · ' + bucketAxisLabel(bucket) + ' ' + bucketLabel(agg.buckets[bi], bucket) + ' (IST)',
+      COLS_C2, drows);
+  });
+}
+
+function renderNotice2(){
+  const d = DB.dq.chart2, host = $('notice2');
+  if (!DB.loaded){ host.innerHTML = ''; return; }
+  const li = [];
+  if (d.badDate)  li.push('<b>' + nf(d.badDate) + '</b> row(s) dropped: <code>deliveryDate</code> present but unparseable.');
+  if (d.noDate - d.badDate > 0) li.push('<b>' + nf(d.noDate - d.badDate) + '</b> row(s) excluded from the time series: ' +
+    '<code>deliveryDate</code> is blank — these are un-bucketable' +
+    (DB.emails.filter(r => r.ts == null && r.bounced === true).length
+      ? ' (' + nf(DB.emails.filter(r => r.ts == null && r.bounced === true).length) + ' of them are bounced sends)' : '') + '.');
+  if (d.noCampaign) li.push('<b>' + nf(d.noCampaign) + '</b> row(s) belong to ' + d.noCampaignIds.length +
+    ' sequence(s) missing from <b>' + esc(TABS.campaign.name) + '</b> (ids ' + esc(d.noCampaignIds.slice(0,8).join(', ')) +
+    (d.noCampaignIds.length > 8 ? '…' : '') + '). Their first-email step is unknown, so they are <b>excluded</b> when ' +
+    '“First email of sequence only” is on, and counted normally otherwise.');
+  if (d.unmatchedSeq) li.push('<b>' + nf(d.unmatchedSeq) + '</b> row(s) have a sequenceId not found in <b>' + esc(TABS.sequences.name) +
+    '</b>. These are <b>kept</b>, labelled from the row\'s own <code>sequenceName</code>.');
+  /* sequences whose Campaign Structure step never appears in their email activity */
+  const zero = [...new Set(DB.emails.filter(r => r.firstStepKnown).map(r => r.seqId))]
+    .filter(s => !DB.emails.some(r => r.seqId === s && r.isFirstEmail));
+  if (zero.length) li.push('<b>' + nf(zero.length) + '</b> sequence(s) with email activity have <b>no row at all</b> at the ' +
+    'first-email step named in <b>' + esc(TABS.campaign.name) + '</b>, so they contribute <b>0</b> to “First email of sequence only”. ' +
+    'Largest: ' + zero.map(s => { const ex = DB.emails.find(r => r.seqId === s); return { n: ex ? ex.seqLabel : s,
+      c: DB.emails.filter(r => r.seqId === s).length, fs: DB.firstStep[s],
+      at: [...new Set(DB.emails.filter(r => r.seqId === s).map(r => r.step))].sort((a,b) => a-b).join('/') }; })
+      .sort((a, b) => b.c - a.c).slice(0,4)
+      .map(x => '<b>' + esc(x.n) + '</b> (wants step ' + x.fs + ', has steps ' + esc(x.at) + ')').join(', ') + '.');
+  li.push('Owner = the <b>first name on the sequence name</b> (<code>Rahul_US_Direct_July</code> → <b>Rahul</b>). ' +
+    '<code>ownerUserId</code> from <b>' + esc(TABS.sequences.name) + '</b> is not used to label owners because licence ' +
+    'seats are shared — ' + nf(new Set(DB.emails.concat(DB.contacts).map(r => r.ownerId).filter(Boolean)).size) +
+    ' ids cover ' + nf(new Set(DB.emails.concat(DB.contacts).map(r => r.owner)).size) + ' people. The raw id is on every ' +
+    'drill-down row and in every export.');
+  paintNotice(host, li);
+}
+
+/* ===================================================================
+   12. Diagnostics panel
+   =================================================================== */
+function renderDiag(){
+  if (!DIAG_VISIBLE) return;                       // hidden: skip the work entirely
+  if (!DB.loaded && !DB.error){ $('diagBody').innerHTML = '<div class="hint">Loading…</div>'; return; }
+  const tabRow = (t, headers, rows, note) =>
+    '<tr><td><b>' + esc(t.name) + '</b><div class="hint">gid ' + esc(t.gid) + '</div></td>' +
+    '<td class="num">' + nf(rows) + '</td>' +
+    '<td>' + (headers.length ? headers.map(h => '<code>' + esc(h) + '</code>').join(', ') : '<i>none — tab is empty</i>') + '</td>' +
+    '<td>' + note + '</td></tr>';
+
+  const steps = Object.entries(DB.firstStep);
+  const stepCounts = {};
+  steps.forEach(([, s]) => stepCounts[s] = (stepCounts[s] || 0) + 1);
+  const seqWithEmails = new Set(DB.emails.map(r => r.seqId));
+
+  const stepRows = steps
+    .filter(([id]) => seqWithEmails.has(id))
+    .map(([id, s]) => {
+      const mine = DB.emails.filter(r => r.seqId === id);
+      const ex = mine[0];
+      return { id, s, name: ex ? ex.seqLabel : '', owner: ex ? ex.owner : '',
+               steps: [...new Set(mine.map(r => r.step))].filter(v => v != null).sort((a,b) => a-b).join(', '),
+               total: mine.length, hits: mine.filter(r => r.isFirstEmail).length };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  /* how many distinct sequences each derived owner covers — a name that appears on
+     exactly one sequence is worth eyeballing (it may not be a person at all) */
+  const ownerSeqCount = {};
+  Object.values(DB.ownerDerivation).forEach(o => { ownerSeqCount[o] = (ownerSeqCount[o] || 0) + 1; });
+
+  $('diagBody').innerHTML =
+    '<table class="dt" style="margin-bottom:22px"><thead><tr><th>Tab</th><th>Rows</th><th>Columns found (header row)</th><th>Role</th></tr></thead><tbody>' +
+      tabRow(TABS.contacts, DB.contactHeaders, DB.contactRawRows,
+        DB.contactRawRows ? 'Fact table for chart 1' : '<b style="color:var(--warn)">EMPTY</b> — chart 1 has no data') +
+      tabRow(TABS.sequences, DB.seqDimHeaders, DB.seqDimRows,
+        DB.seqDimRows ? 'Dimension: sequenceId → sequence name, ownerUserId' : '<b style="color:var(--warn)">EMPTY</b> — sequence names come from the fact rows') +
+      tabRow(TABS.emails, DB.emailHeaders, DB.emailRawRows, 'Fact table for chart 2') +
+      tabRow(TABS.campaign, DB.campaignHeaders, DB.campaignRows, 'Dimension: first-email step per sequence') +
+    '</tbody></table>' +
+
+    '<div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-start">' +
+      '<div><div class="flab">Owner</div><div style="font-size:13px;margin-top:4px;max-width:400px">' +
+        'First name on the sequence name — <code>Rahul_US_Direct_July</code> → <b>Rahul</b>' +
+        '<div class="hint" style="margin-top:4px"><code>ownerUserId</code> is joined from <b>' + esc(TABS.sequences.name) +
+        '</b> and kept on every row, but licences are shared (' +
+        nf(new Set(DB.emails.concat(DB.contacts).map(r => r.ownerId).filter(Boolean)).size) + ' ids across ' +
+        nf(new Set(DB.emails.concat(DB.contacts).map(r => r.owner)).size) + ' people), so it is reference data only. ' +
+        'It is shown as a column in every drill-down and export.</div>' +
+      '</div></div>' +
+      '<div><div class="flab">First-email steps resolved</div><div style="font-size:13px;margin-top:4px;max-width:360px">' +
+        nf(steps.length) + ' sequence(s) · <code>email_step_number</code> distribution: ' +
+        (Object.keys(stepCounts).length
+          ? Object.entries(stepCounts).sort((a,b)=>a[0]-b[0]).map(([s,c]) => '<b>step ' + esc(s) + '</b> → ' + nf(c) + ' seq').join(', ')
+          : '—') +
+        '<div class="hint" style="margin-top:4px">A row is a first email when its ' +
+        '<code>sequenceStepNumber</code> equals its sequence\'s value above.</div>' +
+      '</div></div>' +
+      '<div><div class="flab">Owners found</div><div style="font-size:13px;margin-top:4px;max-width:340px">' +
+        esc([...new Set(DB.emails.concat(DB.contacts).map(r => r.owner))].sort().join(', ') || '—') +
+      '</div></div>' +
+    '</div>' +
+
+    '<div class="flab" style="margin:18px 0 6px">Owner → volume</div>' +
+    '<table class="dt" style="margin-bottom:20px"><thead><tr><th>Owner</th><th>Sequences</th>' +
+    '<th>Contact enrollments</th><th>Emails sent</th>' +
+    '<th>Licence seat(s) used<div class="hint" style="font-weight:400;text-transform:none">ownerUserId</div></th>' +
+    '</tr></thead><tbody>' +
+    [...new Set(DB.emails.concat(DB.contacts).map(r => r.owner))]
+      .map(own => ({ own,
+        seqs: new Set(DB.emails.concat(DB.contacts).filter(r => r.owner === own).map(r => r.seqLabel)).size,
+        ct: DB.contacts.filter(r => r.owner === own).length,
+        em: DB.emails.filter(r => r.owner === own).length,
+        ids: [...new Set(DB.emails.concat(DB.contacts).filter(r => r.owner === own).map(r => r.ownerId).filter(Boolean))].sort() }))
+      .sort((a, b) => (b.em + b.ct) - (a.em + a.ct))
+      .map(x => '<tr><td><b>' + esc(x.own) + '</b></td>' +
+        '<td class="num">' + nf(x.seqs) + '</td><td class="num">' + nf(x.ct) + '</td>' +
+        '<td class="num">' + nf(x.em) + '</td>' +
+        '<td>' + esc(x.ids.join(', ') || '—') + '</td></tr>').join('') +
+    '</tbody></table>' +
+
+    '<details class="disclose"' + (DIAG_OPEN.ownerMap ? ' open' : '') + ' id="dscOwnerMap">' +
+    '<summary><span class="cv">&#9654;</span>Owner derived from each sequence name' +
+    '<span class="ct">' + nf(Object.keys(DB.ownerDerivation).length) + ' sequences</span></summary>' +
+    '<div style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin:8px 0 20px">' +
+    '<table class="dt"><thead><tr><th>Sequence name</th><th>Owner</th><th>How</th></tr></thead><tbody>' +
+    Object.entries(DB.ownerDerivation).sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([seq, own]) => {
+        const patched = !!OWNER_FIXES[String(seq).trim().toLowerCase()];
+        const solo = ownerSeqCount[own] === 1 && !patched;
+        return '<tr' + (patched || solo ? ' style="background:#fffaeb"' : '') + '>' +
+          '<td title="' + esc(seq) + '">' + esc(seq) + '</td>' +
+          '<td><b>' + esc(own) + '</b></td><td>' +
+          (patched ? '<span class="pill y">OWNER_FIXES override</span>'
+           : solo   ? '<span class="pill n">first token — only sequence for this owner, check it is a person</span>'
+                    : '<span class="hint">first token</span>') + '</td></tr>';
+      }).join('') +
+    '</tbody></table></div></details>' +
+
+    '<div class="flab" style="margin:18px 0 6px">First-email step per sequence (sequences that have email activity)</div>' +
+    '<div style="max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px">' +
+    '<table class="dt"><thead><tr><th>Sequence ID</th><th>Sequence</th><th>Owner</th>' +
+    '<th>First-email step<div class="hint" style="font-weight:400;text-transform:none">Campaign Structure</div></th>' +
+    '<th>Steps present<div class="hint" style="font-weight:400;text-transform:none">sequenceStepNumber</div></th>' +
+    '<th>Email rows</th><th>First emails</th></tr></thead><tbody>' +
+    stepRows.map(r => '<tr' + (r.hits === 0 ? ' style="background:#fffaeb"' : '') + '>' +
+      '<td>' + esc(r.id) + '</td><td title="' + esc(r.name) + '">' + esc(r.name) + '</td>' +
+      '<td>' + esc(r.owner) + '</td><td class="num"><b>' + esc(r.s) + '</b></td>' +
+      '<td class="num">' + esc(r.steps || '—') + '</td>' +
+      '<td class="num">' + nf(r.total) + '</td><td class="num">' + nf(r.hits) + '</td></tr>').join('') +
+    '</tbody></table></div>' +
+    '<div class="hint" style="margin-top:6px">Highlighted rows have no email at the step ' +
+    esc(TABS.campaign.name) + ' names, so they contribute 0 first emails.</div>' +
+    (DB.dq.chart2.noCampaignIds && DB.dq.chart2.noCampaignIds.length
+      ? '<div class="hint" style="margin-top:8px">Sequences with email activity but <b>no</b> Campaign Structure row: <code>' +
+        esc(DB.dq.chart2.noCampaignIds.join('</code>, <code>')) + '</code></div>'
+      : '');
+
+  /* remember whether the user opened the sequence→owner map */
+  const dsc = $('dscOwnerMap');
+  if (dsc) dsc.addEventListener('toggle', e => { DIAG_OPEN.ownerMap = e.target.open; });
+}
+
+/* ===================================================================
+   12b. Chart 3 — email performance overview (live platform stats)
+   -------------------------------------------------------------------
+   The API rejects CORS preflight (OPTIONS -> 405), so a browser cannot
+   call it directly. Two supported paths, neither of which ever puts an
+   API token inside this file:
+     · manual  — generate the curl, paste the JSON back (default)
+     · proxy   — reply-proxy.js holds the token in an env var
+   =================================================================== */
+/* Served by reply-proxy.js -> same origin. Opened straight off disk -> loopback,
+   which still works because the proxy allows the null file:// origin. */
+const API_URL = (location.protocol === 'http:' || location.protocol === 'https:')
+  ? '/api/emails-overview' : 'http://127.0.0.1:8787/api/emails-overview';
+const SERVED = location.protocol === 'http:' || location.protocol === 'https:';
+
+const S3 = { quick:'thismonth', from:null, to:null, data:null, at:null, busy:false, err:null,
+             dataKey:null,        // range the loaded numbers actually belong to
+             triedKey:null };     // range we have already attempted, so we retry once, not forever
+const rangeKey = r => iso(r.start) + '_' + iso(r.end);
+
+/* The API treats the window as [from, to), so the selected end day is included
+   by sending the following midnight. */
+const apiFrom = t => iso(t) + 'T00:00:00Z';
+const apiTo   = t => iso(t + DAY) + 'T00:00:00Z';
+
+/* accepts the array form the API returns, or a bare object */
+function parseOverview(txt){
+  let j;
+  try { j = JSON.parse(txt); }
+  catch(e){ throw new Error('That is not valid JSON — paste the whole response, including the outer [ ].'); }
+  if (Array.isArray(j)) j = j[0];
+  if (!j || typeof j !== 'object') throw new Error('Expected an object with contacted / delivered / opened fields.');
+  if (j.contacted == null && j.delivered == null)
+    throw new Error('No "contacted" or "delivered" field found — is this the emails/overview response?');
+  return j;
+}
+
+const M3 = [                       // metric -> label, in display order (meetingsBooked deliberately absent)
+  { k:'delivered',   lab:'Delivered',    tone:'#0e9f6e' },
+  { k:'notReached',  lab:'Not reached',  tone:'#f79009' },
+  { k:'bounced',     lab:'Bounced',      tone:'#e6483d' },
+  { k:'optedOut',    lab:'Opted out',    tone:'#7a5af8' },
+  { k:'outOfOffice', lab:'Out of office',tone:'#98a2b3' },
+  { k:'autoReplied', lab:'Auto-replied', tone:'#06aed4' }
+];
+
+function renderChart3(){
+  const range = resolveRange(S3, []);
+  const key = rangeKey(range);
+  $('from3').value = iso(range.start); $('to3').value = iso(range.end);
+  $('range3').textContent = 'Range sent to the API: ' + apiFrom(range.start) + ' → ' + apiTo(range.end);
+
+  /* Numbers belong to the range they were fetched for. The moment the range moves,
+     the loaded figures are stale — drop them rather than show last range's totals
+     under a new date label. */
+  if (S3.dataKey && S3.dataKey !== key){
+    S3.data = null; S3.at = null; S3.dataKey = null; S3.err = null;
+  }
+
+  /* try once per range, automatically */
+  if (!S3.data && !S3.busy && S3.triedKey !== key){
+    S3.triedKey = key;
+    setTimeout(pull3, 0);
+  }
+
+  chipRow($('chips3'), [
+    { t:'Range: ' + rangeLabel(range) },
+    { t: S3.data ? 'Loaded ' + (S3.at || '') : 'No data for this range', neutral: !S3.data },
+    { t:'Account-wide (no sequence/owner filter)', neutral:true }
+  ]);
+
+  const d = S3.data;
+  const ov = $('ov3');
+
+  if (S3.busy){ overlay(ov, 'loading', 'Fetching ' + rangeLabel(range) + '…', 'Reading the sending platform.'); }
+  else if (!d && S3.err === 'NOPROXY'){
+    overlay(ov, 'err', 'Live data service is not running',
+      'This card is served by <code>reply-proxy.js</code>, which makes the API call for the browser and holds the ' +
+      'API token. Start it, then reload:<br><br><code style="display:inline-block;background:#0f172a;color:#e2e8f0;' +
+      'padding:8px 12px;border-radius:6px;margin-top:2px">node reply-proxy.js</code>' +
+      (SERVED ? '' : '<br><br>You have opened this file directly. Open <b>http://127.0.0.1:8787</b> instead, ' +
+                     'which serves this same dashboard.'));
+  }
+  else if (!d && S3.err){ overlay(ov, 'err', 'The data service returned an error', esc(S3.err)); }
+  else if (!d){ overlay(ov, 'empty', 'No stats for ' + rangeLabel(range), 'Fetching…'); }
+  else overlay(ov, null);
+
+  $('stamp3').textContent = d ? 'Showing ' + rangeLabel(range) + ' · loaded ' + S3.at
+                              : (S3.busy ? 'Fetching…' : 'Not loaded for ' + rangeLabel(range));
+  renderNotice3(d);
+  if (!d){ ['cv3a','cv3b'].forEach(id => { if (CHARTS[id]){ CHARTS[id].destroy(); delete CHARTS[id]; } }); return; }
+
+  drawFunnel3(d);
+  drawHealth3(d);
+}
+
+const pctOf = (n, base) => base > 0 ? (n / base * 100) : 0;
+
+/* funnel: each stage as % of the stage above, which is what actually shows drop-off */
+function drawFunnel3(d){
+  const stages = [
+    { lab:'Contacted',  v:+d.contacted || 0 },
+    { lab:'Delivered',  v:+d.delivered || 0 },
+    { lab:'Opened',     v:+d.opened || 0 },
+    { lab:'Replied',    v:+d.replied || 0 },
+    { lab:'Interested', v:+d.interested || 0 }
+  ];
+  if (CHARTS.cv3a) CHARTS.cv3a.destroy();
+  CHARTS.cv3a = new Chart($('cv3a'), {
+    type:'bar',
+    data:{ labels: stages.map(s => s.lab),
+      datasets:[{ label:'Contacts', data: stages.map(s => s.v),
+        backgroundColor: stages.map((_, i) => ['#2f6df6','#0e9f6e','#f79009','#7a5af8','#12b76a'][i]),
+        borderRadius:4, maxBarThickness:34 }] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ right:96 } },
+      scales:{
+        x:{ beginAtZero:true, title:{ display:true, text:'Contacts', font:{ size:11, weight:'600' }, color:'#98a2b3' },
+            grid:{ color:'#f0f2f5' }, ticks:{ precision:0, font:{ size:10.5 } } },
+        y:{ grid:{ display:false }, ticks:{ font:{ size:11.5, weight:'600' } } }
+      },
+      plugins:{
+        legend:{ display:false },
+        tooltip:{ callbacks:{ label(c){
+          const i = c.dataIndex, prev = i > 0 ? stages[i-1].v : null;
+          const of0 = pctOf(stages[i].v, stages[0].v).toFixed(1) + '% of contacted';
+          return prev == null ? nf(stages[i].v) + ' contacted'
+            : nf(stages[i].v) + '  ·  ' + pctOf(stages[i].v, prev).toFixed(1) + '% of ' + stages[i-1].lab + '  ·  ' + of0;
+        } } },
+        datalabels:{
+          anchor:'end', align:'right', offset:6, color:'#344054', font:{ size:11, weight:'700' },
+          formatter(v, c){
+            const i = c.dataIndex, prev = i > 0 ? stages[i-1].v : null;
+            return prev == null ? nf(v) : nf(v) + '  (' + pctOf(v, prev).toFixed(1) + '%)';
+          }
+        }
+      }
+    }
+  });
+}
+
+function drawHealth3(d){
+  const c = +d.contacted || 0;
+  const rows = M3.map(m => ({ lab:m.lab, v:+d[m.k] || 0, tone:m.tone }));
+  if (CHARTS.cv3b) CHARTS.cv3b.destroy();
+  CHARTS.cv3b = new Chart($('cv3b'), {
+    type:'bar',
+    data:{ labels: rows.map(r => r.lab),
+      datasets:[{ label:'Emails', data: rows.map(r => r.v),
+        backgroundColor: rows.map(r => r.tone), borderRadius:4, maxBarThickness:26 }] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ right:104 } },
+      scales:{
+        x:{ beginAtZero:true, title:{ display:true, text:'Emails', font:{ size:11, weight:'600' }, color:'#98a2b3' },
+            grid:{ color:'#f0f2f5' }, ticks:{ precision:0, font:{ size:10.5 } } },
+        y:{ grid:{ display:false }, ticks:{ font:{ size:11.5 } } }
+      },
+      plugins:{
+        legend:{ display:false },
+        tooltip:{ callbacks:{ label: x => nf(x.parsed.x) + '  ·  ' + pctOf(x.parsed.x, c).toFixed(2) + '% of contacted' } },
+        datalabels:{ anchor:'end', align:'right', offset:6, color:'#344054', font:{ size:11, weight:'700' },
+          formatter: v => nf(v) + '  (' + pctOf(v, c).toFixed(2) + '%)' }
+      }
+    }
+  });
+}
+
+function renderNotice3(d){
+  const host = $('notice3'), li = [];
+  if (d){
+    const c = +d.contacted || 0, dl = +d.delivered || 0;
+    /* The source mixes denominators: openedPercentage is of delivered, the rest are of
+       contacted. Say so rather than let someone mis-read the API's own numbers. */
+    if (d.openedPercentage != null && c && dl){
+      li.push('The source\'s own <code>openedPercentage</code> (<b>' + esc(d.openedPercentage) + '%</b>) is measured against ' +
+        '<b>delivered</b>, while <code>deliveredPercentage</code>, <code>bouncedPercentage</code> and the rest are measured ' +
+        'against <b>contacted</b>. This card labels the base on every number so the two are not confused.');
+    }
+    const nr = +d.notReached || 0, bo = +d.bounced || 0;
+    if (nr && bo) li.push('<b>Bounced (' + nf(bo) + ')</b> is a subset of <b>not reached (' + nf(nr) + ')</b>, ' +
+      'and delivered + not-reached slightly exceeds contacted, so these categories overlap. They are shown as ' +
+      'separate bars rather than a stack for that reason.');
+    if ((+d.replied || 0) === 0 && (+d.interested || 0) === 0)
+      li.push('<b>Replied</b> and <b>interested</b> are both <b>0</b> for this range. That matches the sheet, where ' +
+        '<code>isReplied</code> is false on every row — worth confirming reply tracking is switched on at the source.');
+    li.push('These totals are <b>account-wide</b>. They will not tie out to charts 1 and 2 if those have a sequence or ' +
+      'owner filter applied, and the sheet only covers the sequences exported to it.');
+  }
+  li.push('Your API token is never stored in this file — it lives in an environment variable read by ' +
+    '<code>reply-proxy.js</code>, or stays in your terminal when you load a range by hand.');
+  paintNotice(host, li);
+}
+
+/* Fetch the range through the local service. Fired automatically
+   whenever the range changes, and by the Refresh button. */
+async function pull3(){
+  const range = resolveRange(S3, []);
+  const key = rangeKey(range);
+  S3.triedKey = key;
+  S3.busy = true; S3.err = null; renderChart3();
+  try{
+    const qs = '?from=' + encodeURIComponent(apiFrom(range.start)) +
+               '&to='   + encodeURIComponent(apiTo(range.end));
+    const res = await fetch(API_URL + qs, { headers:{ 'Accept':'application/json' } });
+    const txt = await res.text();
+    if (!res.ok){
+      let msg = 'HTTP ' + res.status;
+      try { const j = JSON.parse(txt); if (j && j.error) msg = j.error; } catch(e){}
+      throw new Error(msg);
+    }
+    S3.data = parseOverview(txt);
+    S3.at = clockNow(); S3.dataKey = key; S3.err = null;
+  }catch(err){
+    S3.err = /Failed to fetch|NetworkError|Load failed/i.test(err.message)
+      ? 'NOPROXY' : err.message;
+  }finally{
+    S3.busy = false; renderChart3();
+  }
+}
+
+/* ===================================================================
+   13. Global notice + orchestration
+   =================================================================== */
+function renderGlobalNotice(){
+  const host = $('globalNotice');
+  if (DB.error){
+    host.innerHTML = '<div class="notice err"><b>Could not read the Google Sheet.</b> ' + esc(DB.error) +
+      '<br><br>The dashboard reads the sheet client-side through the public <code>gviz</code> endpoint, which needs the ' +
+      'file to be link-shareable (“Anyone with the link → Viewer”). If the sheet must stay restricted, this file cannot ' +
+      'read it from the browser — it would need the Sheets API with an API key (for a public sheet) or a service account ' +
+      '+ a small server-side proxy (for a private one), since browser-side OAuth would have to be added.</div>';
+    return;
+  }
+  if (!DB.loaded){ host.innerHTML = ''; return; }
+  const empties = [];
+  if (DB.contactRawRows === 0) empties.push(TABS.contacts.name);
+  if (DB.seqDimRows === 0)     empties.push(TABS.sequences.name);
+  if (!empties.length){ host.innerHTML = ''; return; }
+  host.innerHTML = '<div class="notice warn"><b>Two source tabs are currently empty in the sheet:</b> ' +
+    empties.map(e => '<code>' + esc(e) + '</code>').join(' and ') + '.' +
+    '<ul>' +
+    (DB.contactRawRows === 0
+      ? '<li><b>Chart 1 (contacts added) has no data to show.</b> The tab has no header row and no rows. ' +
+        'The chart is built and wired — it will populate on the next 60s refresh once rows land, with no code change.</li>' : '') +
+    (DB.seqDimRows === 0
+      ? '<li><b>The <code>sequenceId → owner</code> join cannot resolve</b>, so owner is derived from the sequence-name ' +
+        'prefix instead (e.g. <code>Rahul_US_Direct_UnityOne_July_Automated</code> → <b>Rahul</b>). ' +
+        'The real join takes over automatically once the tab is filled.</li>' : '') +
+    '</ul></div>';
+}
+
+function renderEverything(){
+  renderGlobalNotice();
+  renderChart1();
+  renderChart2();
+  renderChart3();
+  renderDiag();
+  if (DB.lastUpdated) $('lastUpd').textContent = DB.lastUpdated.toLocaleTimeString('en-GB', { hour12:false });
+}
+
+/* ===================================================================
+   14. Wire up controls
+   =================================================================== */
+$('srcLink').href = SHEET_URL;
+
+const BUCKETS = [{k:'auto',lab:'Auto'},{k:'day',lab:'Day'},{k:'week',lab:'Week'},{k:'month',lab:'Month'}];
+const BREAK   = [{k:'owner',lab:'Owner'},{k:'sequence',lab:'Sequence'}];
+const BARS    = [{k:'stacked',lab:'Stacked'},{k:'grouped',lab:'Grouped'}];
+const EMPTY   = [{k:'hide',lab:'Hide'},{k:'show',lab:'Show'}];
+
+function refreshControls(){
+  quickControl($('q1'), S1, () => { S1.quick !== 'custom' && (S1.from = S1.to = null); refreshControls(); renderChart1(); });
+  quickControl($('q2'), S2, () => { S2.quick !== 'custom' && (S2.from = S2.to = null); refreshControls(); renderChart2(); });
+  segControl($('b1'),  BUCKETS, () => S1.bucket, k => { S1.bucket = k; refreshControls(); renderChart1(); });
+  segControl($('st1'), BARS,    () => S1.stacked ? 'stacked' : 'grouped', k => { S1.stacked = (k === 'stacked'); refreshControls(); renderChart1(); });
+  segControl($('ge1'), EMPTY,   () => S1.hideEmpty ? 'hide' : 'show', k => { S1.hideEmpty = (k === 'hide'); refreshControls(); renderChart1(); });
+  segControl($('b2'),  BUCKETS, () => S2.bucket, k => { S2.bucket = k; refreshControls(); renderChart2(); });
+  segControl($('bd2'), BREAK,   () => S2.breakdown, k => { S2.breakdown = k; refreshControls(); renderChart2(); });
+  segControl($('st2'), BARS,    () => S2.stacked ? 'stacked' : 'grouped', k => { S2.stacked = (k === 'stacked'); refreshControls(); renderChart2(); });
+  segControl($('ge2'), EMPTY,   () => S2.hideEmpty ? 'hide' : 'show', k => { S2.hideEmpty = (k === 'hide'); refreshControls(); renderChart2(); });
+  quickControl($('q3'), S3, () => { if (S3.quick !== 'custom'){ S3.from = S3.to = null; } refreshControls(); renderChart3(); });
+  segControl($('fe2'), [{k:'all',lab:'All emails'},{k:'first',lab:'First email of sequence only'}],
+             () => S2.firstOnly ? 'first' : 'all',
+             k => { S2.firstOnly = (k === 'first'); refreshControls(); renderChart2(); });
+}
+
+/* date inputs + unique checkbox */
+$('from1').onchange = e => { const t = parseCivil(e.target.value); if (t != null){ S1.from = startOfDay(t); S1.quick = 'custom'; refreshControls(); renderChart1(); } };
+$('to1').onchange   = e => { const t = parseCivil(e.target.value); if (t != null){ S1.to   = startOfDay(t); S1.quick = 'custom'; refreshControls(); renderChart1(); } };
+$('from2').onchange = e => { const t = parseCivil(e.target.value); if (t != null){ S2.from = startOfDay(t); S2.quick = 'custom'; refreshControls(); renderChart2(); } };
+$('to2').onchange   = e => { const t = parseCivil(e.target.value); if (t != null){ S2.to   = startOfDay(t); S2.quick = 'custom'; refreshControls(); renderChart2(); } };
+$('uniq1').onchange = e => { S1.unique = e.target.checked; renderChart1(); };
+$('from3').onchange = e => { const t = parseCivil(e.target.value); if (t != null){ S3.from = startOfDay(t); S3.quick = 'custom'; refreshControls(); renderChart3(); } };
+$('to3').onchange   = e => { const t = parseCivil(e.target.value); if (t != null){ S3.to   = startOfDay(t); S3.quick = 'custom'; refreshControls(); renderChart3(); } };
+
+$('btnPull3').onclick = () => { S3.triedKey = null; S3.err = null; pull3(); };
+
+const ms1seq = makeMulti($('ms1seq'), 'sequence', S1.seqSel, renderChart1);
+const ms1own = makeMulti($('ms1own'), 'owner',    S1.ownSel, renderChart1);
+const ms2seq = makeMulti($('ms2seq'), 'sequence', S2.seqSel, renderChart2);
+const ms2own = makeMulti($('ms2own'), 'owner',    S2.ownSel, renderChart2);
+
+$('btnRefresh').onclick = () => { if (!DB.loading) loadAll(); };
+
+/* footer link: reveal / hide the diagnostics card */
+$('btnDiag').onclick = () => {
+  DIAG_VISIBLE = !DIAG_VISIBLE;
+  $('cardDiag').hidden = !DIAG_VISIBLE;
+  $('btnDiag').textContent = DIAG_VISIBLE ? 'Hide diagnostics' : 'Data source & join diagnostics';
+  if (DIAG_VISIBLE){
+    renderDiag();
+    $('cardDiag').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+};
+
+/* ===================================================================
+   15. Auto-refresh — never resets filters, only re-reads the data
+   =================================================================== */
+let secsLeft = REFRESH_MS / 1000;
+setInterval(() => {
+  if (DB.loading) return;
+  secsLeft--;
+  if (secsLeft <= 0){ secsLeft = REFRESH_MS / 1000; loadAll(); S3.triedKey = null; pull3(); }
+  else if (!DB.error) $('nextTick').textContent = 'auto-refresh in ' + secsLeft + 's';
+  else $('nextTick').textContent = 'retrying in ' + secsLeft + 's';
+}, 1000);
+
+refreshControls();
+renderEverything();
+loadAll();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "unitedlayer-sequence-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sequence enrolment and email activity dashboard, reading a Google Sheet plus the email platform reporting API.",
+  "scripts": {
+    "dev": "node reply-proxy.js",
+    "check": "node --check reply-proxy.js && node --check api/emails-overview.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}
