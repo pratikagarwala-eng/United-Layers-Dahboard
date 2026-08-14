@@ -84,10 +84,22 @@ module.exports = async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests — try again in a minute' });
   }
 
-  const token = process.env.REPLY_API_TOKEN;
+  /* Name the missing variable explicitly. The variable *name* is already public in
+     the README, so saying it leaks nothing and saves a guessing game — the value
+     is of course never echoed. */
+  const token = (process.env.REPLY_API_TOKEN || '').trim();
   if (!token) {
-    console.error('REPLY_API_TOKEN is not configured');
-    return res.status(500).json({ error: 'Server is not configured' });
+    console.error(
+      'REPLY_API_TOKEN is missing from this deployment. Add it under Project → ' +
+      'Settings → Environment Variables (tick Production, Preview and Development), ' +
+      'then redeploy — Vercel only picks up env vars at build time. ' +
+      'Environment seen: ' + (process.env.VERCEL_ENV || 'local')
+    );
+    return res.status(500).json({
+      error: 'REPLY_API_TOKEN is not set for this deployment (' +
+             (process.env.VERCEL_ENV || 'local') + '). Add it in Vercel → Settings → ' +
+             'Environment Variables, then redeploy.'
+    });
   }
 
   const { from, to } = req.query || {};
