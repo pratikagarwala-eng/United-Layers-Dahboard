@@ -1,12 +1,13 @@
 # UnitedLayer — Sequence & Email Activity Dashboard
 
-Single-page dashboard covering three questions:
+Single-page dashboard covering four questions:
 
 1. **Contacts added to sequences** — enrolments over time, by owner, with unique-contact de-duplication.
 2. **Emails sent** — sends over time, with a first-email-of-sequence filter.
 3. **Email performance overview** — account-wide funnel and delivery health for a date range, pulled live from the sending platform's reporting API.
+4. **Overdue tasks by owner** — open tasks past their due date, one bar per owner, grouped by task type.
 
-Charts 1 and 2 read a Google Sheet directly in the browser. Chart 3 goes through a
+Charts 1, 2 and 4 read a Google Sheet directly in the browser. Chart 3 goes through a
 server-side function so the API token never reaches the client.
 
 ---
@@ -63,6 +64,11 @@ vercel.json             security headers, no-store on the HTML
 - **Timezone** — sheet timestamps carry no offset and are treated as IST
   (Asia/Kolkata) wall-clock. All bucketing uses UTC getters over civil timestamps,
   so results do not shift with the viewer's browser timezone.
+- **Overdue task due dates** — taken from `dueToRaw` (UTC) plus 5:30. The sheet's own
+  `dueToIST` column is deliberately ignored: it is blank on most rows, and where it is
+  filled the day and month are transposed (a task due `2026-05-03 09:49` appears as
+  `2026-03-05 15:19` — the +5:30 is right, the date is not). Fixing that formula at
+  source would let the column be used directly.
 - **De-duplication** — contact email lowercased, falling back to contact ID. When
   "unique contacts only" is on, each contact is attributed to its earliest
   `addingDate` in range, so stacked segments always sum to the headline total.

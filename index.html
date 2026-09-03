@@ -436,6 +436,67 @@
     </div>
   </div>
 
+
+  <!-- ==================== CHART 4 · OVERDUE TASKS ==================== -->
+  <div class="card" id="card4">
+    <div class="card-hd">
+      <h2>4 · Overdue tasks by owner</h2>
+      <div class="desc">
+        Open manual tasks whose due date has already passed — one bar per owner, grouped by task type.
+        Due dates are read from <code>dueToRaw</code> and converted to IST; see the notes for why the sheet's
+        own <code>dueToIST</code> column is not used.
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="frow">
+        <div class="fgroup">
+          <span class="flab">Due date (IST)</span>
+          <div class="quick" id="q4"></div>
+        </div>
+        <div class="fgroup"><span class="flab">From</span><input type="date" id="from4"></div>
+        <div class="fgroup"><span class="flab">To</span><input type="date" id="to4"></div>
+        <div class="fgroup">
+          <span class="flab">Sequence</span>
+          <div class="ms" id="ms4seq"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Owner</span>
+          <div class="ms" id="ms4own"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Task type</span>
+          <div class="ms" id="ms4type"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Type detail</span>
+          <div class="seg" id="td4"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Bars</span>
+          <div class="seg" id="st4"></div>
+        </div>
+        <div class="fgroup">
+          <span class="flab">Sort by</span>
+          <div class="seg" id="sr4"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpi4"></div>
+    <div class="chips" id="chips4"></div>
+    <div id="notice4"></div>
+
+    <div class="chart-area">
+      <div class="chart-box"><canvas id="cv4"></canvas></div>
+      <div class="overlay" id="ov4"></div>
+      <div class="foot">
+        <span>X axis: <b>Owner</b> · Y axis: <b>Overdue tasks</b> · grouped by task type</span>
+        <span>Click any bar to see the underlying tasks &amp; export CSV</span>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== DIAGNOSTICS (hidden until asked for) ==================== -->
   <div class="card" id="cardDiag" hidden>
     <div class="card-hd">
@@ -496,7 +557,8 @@ const TABS = {
   emails:    { gid: '77846492',   name: 'All Email Activities' },
   sequences: { gid: '158136843',  name: 'All Sequences' },
   campaign:  { gid: '586951354',  name: 'Campaign Structure' },
-  contacts:  { gid: '1804089604', name: 'List all Contact In Sequnce' }
+  contacts:  { gid: '1804089604', name: 'List all Contact In Sequnce' },
+  tasks:     { gid: '853369931',  name: 'Overdue Tasks' }
 };
 
 /* Owner = the first name on the sequence, e.g. "Rahul_US_Direct_July" -> Rahul.
@@ -513,7 +575,14 @@ const OWNER_FIXES = {
   'manual email_ishika'               : 'Ishika',    // person named at the end
   'manual_testinfra_ishika'           : 'Ishika',
   'manual_aryaman'                    : 'Aryaman',
-  'inbound leads_gaurav master'       : 'Gaurav'
+  'inbound leads_gaurav master'       : 'Gaurav',
+  /* region-first names: the person is at the end, not the start */
+  'europe_var_aryaman 4'              : 'Aryaman',
+  'europe_var_aryaman 3'              : 'Aryaman',
+  'europe_datacenter_aryaman 4'       : 'Aryaman',
+  'us_enterprises_combined_nishant'   : 'Nishant',
+  'in_dc_rahul'                       : 'Rahul',
+  'me_si_rahul'                       : 'Rahul'
 };
 
 const MAX_SERIES = 12;           // series shown before collapsing into "Other"
@@ -659,7 +728,8 @@ const DB = {
   emails:[], emailHeaders:[], emailRawRows:0,
   contacts:[], contactHeaders:[], contactRawRows:0, contactMap:null,
   campRaw:{},
-  dq:{ chart1:{}, chart2:{} }
+  tasks:[], taskHeaders:[], taskRawRows:0,
+  dq:{ chart1:{}, chart2:{}, chart4:{} }
 };
 
 async function loadAll(){
@@ -667,11 +737,12 @@ async function loadAll(){
   DB.loading = true; DB.error = null;
   setStatus('busy', 'loading…');
   try{
-    const [emR, sqR, cpR, ctR] = await Promise.all([
+    const [emR, sqR, cpR, ctR, tkR] = await Promise.all([
       gvizJSONP(TABS.emails.gid), gvizJSONP(TABS.sequences.gid),
-      gvizJSONP(TABS.campaign.gid), gvizJSONP(TABS.contacts.gid)
+      gvizJSONP(TABS.campaign.gid), gvizJSONP(TABS.contacts.gid),
+      gvizJSONP(TABS.tasks.gid)
     ]);
-    buildModel(tableToRows(emR), tableToRows(sqR), tableToRows(cpR), tableToRows(ctR));
+    buildModel(tableToRows(emR), tableToRows(sqR), tableToRows(cpR), tableToRows(ctR), tableToRows(tkR));
     DB.loaded = true; DB.lastUpdated = new Date();
     setStatus('ok');
   }catch(err){
@@ -683,7 +754,7 @@ async function loadAll(){
   }
 }
 
-function buildModel(em, sq, cp, ct){
+function buildModel(em, sq, cp, ct, tk){
   /* ---------- All Sequences (dimension) ---------- */
   DB.seqDim = {}; DB.seqDimHasOwner = false;
   DB.seqDimHeaders = sq.headers; DB.seqDimRows = sq.rows.length;
@@ -808,12 +879,62 @@ function buildModel(em, sq, cp, ct){
     });
   }
 
+  /* ---------- Overdue Tasks (fact for chart 4) ----------
+     dueToIST in the sheet is unusable: it is populated on only a minority of rows
+     and has the day and month transposed (dueToRaw 2026-05-03 09:49 becomes
+     2026-03-05 15:19 — the +5:30 is right, the date is swapped). dueToRaw is
+     complete and is UTC, so the IST due date is derived here as dueToRaw + 5:30
+     and the sheet's own column is ignored. The discrepancy is reported in the
+     chart's notes so the sheet formula can be fixed at source. */
+  DB.taskHeaders = tk.headers; DB.taskRawRows = tk.rows.length;
+  DB.tasks = [];
+  if (!tk.empty){
+    const kId   = pickCol(tk.headers, [/^taskid$/, /task.*id/]);
+    const kType = pickCol(tk.headers, [/^tasktype$/, /task.*type/, /^type$/]);
+    const kLi   = pickCol(tk.headers, [/linkedintasktype/, /linkedin.*type/]);
+    const kStat = pickCol(tk.headers, [/^status$/, /state/]);
+    const kUser = pickCol(tk.headers, [/assigneduserid/, /assigned.*user/, /owneruserid/]);
+    const kCid  = pickCol(tk.headers, [/^contactid$/, /contact.*id/]);
+    const kCnm  = pickCol(tk.headers, [/^contactname$/, /contact.*name/, /fullname/]);
+    const kSeq  = pickCol(tk.headers, [/^sequenceid$/, /sequence.*id/, /campaign.*id/]);
+    const kStep = pickCol(tk.headers, [/sequencestepid/, /step.*id/]);
+    const kDueR = pickCol(tk.headers, [/^duetoraw$/, /due.*raw/, /^dueto$/]);
+    const kDueI = pickCol(tk.headers, [/^duetoist$/, /due.*ist/, /duedate.*ist/]);
+    const kStart= pickCol(tk.headers, [/^startatraw$/, /start.*raw/, /^startat$/]);
+    const kDays = pickCol(tk.headers, [/daysoverdue/, /days.*over/, /overdue.*days/]);
+
+    const IST_SHIFT = 5.5 * 3600000;
+    DB.tasks = tk.rows.map((r, i) => {
+      const rawTs = parseCivil(kDueR ? r[kDueR] : null);         // UTC wall-clock
+      const sheetIst = parseCivil(kDueI ? r[kDueI] : null);      // present but transposed
+      const base = String(kType ? (r[kType] == null ? '' : r[kType]) : '').trim();
+      const li = String(kLi ? (r[kLi] == null ? '' : r[kLi]) : '').trim();
+      return {
+        _i: i,
+        taskId : kId ? String(r[kId] == null ? '' : r[kId]).trim() : '',
+        typeRaw: base,
+        liType : li,
+        status : kStat ? String(r[kStat] == null ? '' : r[kStat]).trim() : '',
+        userId : kUser ? String(r[kUser] == null ? '' : r[kUser]).trim() : '',
+        cid    : kCid ? String(r[kCid] == null ? '' : r[kCid]).trim() : '',
+        name   : kCnm ? String(r[kCnm] == null ? '' : r[kCnm]).trim() : '',
+        seqId  : kSeq ? String(r[kSeq] == null ? '' : r[kSeq]).trim() : '',
+        stepId : kStep ? String(r[kStep] == null ? '' : r[kStep]).trim() : '',
+        ts     : rawTs == null ? null : rawTs + IST_SHIFT,        // due date, IST
+        tsRaw  : rawTs,
+        sheetIst: sheetIst,
+        startTs: (() => { const s = parseCivil(kStart ? r[kStart] : null); return s == null ? null : s + IST_SHIFT; })(),
+        days   : kDays != null && r[kDays] != null && r[kDays] !== '' ? Number(r[kDays]) : null
+      };
+    });
+  }
+
   /* ---------- sequence label + owner on every fact row ----------
      Owner = first name on the sequence name. ownerUserId is still joined from
      All Sequences and kept on the row, but it identifies a shared licence seat
      rather than a person, so it is reference data only. */
   DB.ownerDerivation = {};                       // sequence name -> owner, for the audit table
-  [DB.emails, DB.contacts].forEach(list => list.forEach(r => {
+  [DB.emails, DB.contacts, DB.tasks].forEach(list => list.forEach(r => {
     const dim = DB.seqDim[r.seqId];
     r.seqLabel = (dim && dim.name) || r.seqName || (r.seqId ? 'Sequence ' + r.seqId : 'Unknown sequence');
     r.dimMatched = !!dim;
@@ -846,6 +967,23 @@ function buildModel(em, sq, cp, ct){
     noCampaign: DB.emails.filter(r => !r.firstStepKnown).length,
     noCampaignIds: [...new Set(DB.emails.filter(r => !r.firstStepKnown).map(r => r.seqId))]
   };
+  DB.dq.chart4 = (() => {
+    const t = DB.tasks;
+    const swapped = t.filter(r => {
+      /* day/month transposed: sheet IST date reversed vs the +5:30 truth */
+      if (r.sheetIst == null || r.ts == null) return false;
+      return cM(r.sheetIst) === cD(r.ts) - 1 && cD(r.sheetIst) === cM(r.ts) + 1
+             && cD(r.ts) !== cM(r.ts) + 1;
+    }).length;
+    return {
+      total: t.length,
+      noDate: t.filter(r => r.ts == null).length,
+      sheetIstBlank: t.filter(r => r.sheetIst == null).length,
+      sheetIstSwapped: swapped,
+      unmatchedSeq: t.filter(r => !r.dimMatched).length,
+      notNew: t.filter(r => r.status && r.status.toLowerCase() !== 'new').length
+    };
+  })();
   DB.dq.chart1 = {
     total: DB.contacts.length,
     noDate: DB.contacts.filter(r => r.ts == null).length,
@@ -869,6 +1007,16 @@ function ownerFromSequenceName(name){
   tok = tok.split('.')[0].split('-')[0].replace(/[^A-Za-z]/g, '');
   if (!tok) return 'Unknown';
   return titleCase(tok);
+}
+
+/* Task type for the grouped bars. "Basic" keeps the platform's three types;
+   "detailed" splits LinkedIn into connect vs message, which is the distinction
+   that actually changes what an SDR has to do. */
+const TASK_LABEL = { call:'Call', manualEmail:'Manual email', linkedIn:'LinkedIn' };
+function taskType(r, detailed){
+  const base = TASK_LABEL[r.typeRaw] || (r.typeRaw ? titleCase(r.typeRaw) : 'Unknown');
+  if (!detailed || r.typeRaw !== 'linkedIn') return base;
+  return r.liType ? 'LinkedIn · ' + r.liType : 'LinkedIn';
 }
 
 /* dedupe key: contact email (lowercased/trimmed), else contact ID */
@@ -1755,6 +1903,9 @@ function renderDiag(){
         DB.seqDimRows ? 'Dimension: sequenceId → sequence name, ownerUserId' : '<b style="color:var(--warn)">EMPTY</b> — sequence names come from the fact rows') +
       tabRow(TABS.emails, DB.emailHeaders, DB.emailRawRows, 'Fact table for chart 2') +
       tabRow(TABS.campaign, DB.campaignHeaders, DB.campaignRows, 'Dimension: first-email step per sequence') +
+      tabRow(TABS.tasks, DB.taskHeaders, DB.taskRawRows,
+        DB.taskRawRows ? 'Fact table for chart 4 · due date derived from <code>dueToRaw</code> + 5:30'
+                       : '<b style="color:var(--warn)">EMPTY</b> — chart 4 has no data') +
     '</tbody></table>' +
 
     '<div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-start">' +
@@ -2062,6 +2213,221 @@ async function pull3(){
 }
 
 /* ===================================================================
+   12c. Chart 4 — overdue tasks by owner, grouped by task type
+   =================================================================== */
+const S4 = { quick:'all', from:null, to:null, detailed:false, stacked:false,
+             sort:'count', seqSel:new Set(), ownSel:new Set(), typeSel:new Set() };
+
+function filterTasks(st, range){
+  const seqAll = st.seqSel.size === 0, ownAll = st.ownSel.size === 0, typeAll = st.typeSel.size === 0;
+  return DB.tasks.filter(r => {
+    if (r.ts == null) return false;
+    const d = startOfDay(r.ts);
+    if (d < range.start || d > range.end) return false;
+    if (!seqAll && !st.seqSel.has(r.seqLabel)) return false;
+    if (!ownAll && !st.ownSel.has(r.owner)) return false;
+    if (!typeAll && !st.typeSel.has(taskType(r, st.detailed))) return false;
+    return true;
+  });
+}
+
+/* owners on the x axis, task types as the grouped series */
+function aggregateTasks(rows, st){
+  const byOwner = new Map();
+  rows.forEach(r => {
+    const o = r.owner || 'Unknown';
+    if (!byOwner.has(o)) byOwner.set(o, []);
+    byOwner.get(o).push(r);
+  });
+  let owners = [...byOwner.keys()];
+  if (st.sort === 'name') owners.sort((a, b) => a.localeCompare(b));
+  else owners.sort((a, b) => byOwner.get(b).length - byOwner.get(a).length || a.localeCompare(b));
+
+  const typeTotals = new Map();
+  rows.forEach(r => {
+    const t = taskType(r, st.detailed);
+    typeTotals.set(t, (typeTotals.get(t) || 0) + 1);
+  });
+  const series = [...typeTotals.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(e => e[0]);
+
+  const grid = series.map(() => owners.map(() => 0));
+  const rowsAt = series.map(() => owners.map(() => []));
+  owners.forEach((o, oi) => byOwner.get(o).forEach(r => {
+    const si = series.indexOf(taskType(r, st.detailed));
+    if (si < 0) return;
+    grid[si][oi]++; rowsAt[si][oi].push(r);
+  }));
+  return { owners, series, grid, rowsAt };
+}
+
+const COLS_C4 = [
+  { h:'Contact',      get:r => r.name },
+  { h:'Task type',    get:r => taskType(r, true) },
+  { h:'Owner',        get:r => r.owner },
+  { h:'Sequence',     get:r => r.seqLabel },
+  { h:'Due (IST)',    get:r => fmtDateTime(r.ts) },
+  { h:'Days overdue', get:r => r.days, num:true },
+  { h:'Status',       get:r => r.status },
+  { h:'Task ID',      get:r => r.taskId },
+  { h:'Contact ID',   get:r => r.cid },
+  { h:'Sequence ID',  get:r => r.seqId },
+  { h:'ownerUserId (shared seat)', get:r => r.userId },
+  { h:'Due (raw/UTC in sheet)',    get:r => fmtDateTime(r.tsRaw) }
+];
+
+function renderChart4(){
+  const st = S4, ov = $('ov4');
+  const range = resolveRange(st, DB.tasks);
+  $('from4').value = iso(range.start); $('to4').value = iso(range.end);
+
+  ms4seq.setOptions(optionCounts(DB.tasks, r => r.seqLabel));
+  ms4own.setOptions(optionCounts(DB.tasks, r => r.owner));
+  ms4type.setOptions(optionCounts(DB.tasks, r => taskType(r, st.detailed)));
+
+  const rows = filterTasks(st, range);
+  const days = rows.map(r => r.days).filter(v => v != null && !isNaN(v));
+  const worst = rows.reduce((a, r) => (r.ts != null && (!a || r.ts < a.ts)) ? r : a, null);
+  const byOwner = new Map();
+  rows.forEach(r => byOwner.set(r.owner, (byOwner.get(r.owner) || 0) + 1));
+  const top = [...byOwner.entries()].sort((a, b) => b[1] - a[1])[0];
+
+  $('kpi4').innerHTML =
+    kpiBlock('Overdue tasks', rows.length, rangeLabel(range)) +
+    kpiBlock('Owners affected', byOwner.size, 'with at least one overdue task') +
+    kpiBlock('Avg days overdue', days.length ? (days.reduce((a, b) => a + b, 0) / days.length).toFixed(1) : '—',
+             days.length ? 'median ' + median(days).toFixed(0) + ' days' : 'no daysOverdue values') +
+    kpiBlock('Oldest overdue', days.length ? Math.max(...days) + ' days' : '—',
+             worst ? 'due ' + fmtDay(worst.ts) : '') +
+    kpiBlock('Most overdue owner', top ? top[0] : '—', top ? nf(top[1]) + ' tasks' : '');
+
+  chipRow($('chips4'), [
+    { t:'Due: ' + rangeLabel(range) },
+    { t:'Sequence: ' + (st.seqSel.size ? st.seqSel.size + ' selected' : 'all'), neutral: !st.seqSel.size },
+    { t:'Owner: ' + (st.ownSel.size ? [...st.ownSel].join(', ') : 'all'), neutral: !st.ownSel.size },
+    { t:'Type: ' + (st.typeSel.size ? [...st.typeSel].join(', ') : 'all'), neutral: !st.typeSel.size },
+    { t: st.detailed ? 'LinkedIn split by connect/message' : 'Platform task types', neutral:true },
+    { t:'Sorted by ' + (st.sort === 'name' ? 'owner name' : 'task count'), neutral:true }
+  ]);
+
+  renderNotice4();
+
+  if (!DB.loaded && DB.loading){ overlay(ov, 'loading', 'Loading overdue tasks…', 'Reading <code>' + esc(TABS.tasks.name) + '</code>.'); return; }
+  if (DB.error){ overlay(ov, 'err', 'Could not load the sheet', esc(DB.error)); return; }
+  if (DB.taskRawRows === 0){
+    overlay(ov, 'empty', 'Source tab is empty', 'The tab <code>' + esc(TABS.tasks.name) + '</code> returned no rows.');
+    if (CHARTS.cv4){ CHARTS.cv4.destroy(); delete CHARTS.cv4; }
+    return;
+  }
+  if (!rows.length){
+    const ts = DB.tasks.map(r => r.ts).filter(t => t != null);
+    overlay(ov, 'empty', 'No overdue tasks in this range',
+      'Nothing matches the current filters.' + (ts.length
+        ? ' Due dates in the tab run <b>' + esc(fmtDay(Math.min(...ts))) + '</b> to <b>' +
+          esc(fmtDay(Math.max(...ts))) + '</b> (IST).' : '') + ' Try <b>All time</b>.');
+    if (CHARTS.cv4){ CHARTS.cv4.destroy(); delete CHARTS.cv4; }
+    return;
+  }
+  overlay(ov, null);
+
+  const agg = aggregateTasks(rows, st);
+  drawTaskChart(agg, st);
+}
+
+const median = a => { const s = [...a].sort((x, y) => x - y); const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+function drawTaskChart(agg, st){
+  if (CHARTS.cv4) CHARTS.cv4.destroy();
+  const stacked = st.stacked;
+  const datasets = agg.series.map((name, si) => ({
+    label: name,
+    data: agg.grid[si],
+    backgroundColor: PALETTE[si % PALETTE.length],
+    borderRadius: 3, borderSkipped: false,
+    maxBarThickness: stacked ? 54 : 30
+  }));
+
+  CHARTS.cv4 = new Chart($('cv4'), {
+    type:'bar',
+    data:{ labels: agg.owners, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      animation:{ duration:250 },
+      interaction:{ mode:'nearest', intersect:true },
+      onClick(evt, els){
+        if (!els.length) return;
+        const e = els[0];
+        const rows = agg.rowsAt[e.datasetIndex][e.index];
+        openDrill(
+          'Overdue tasks — ' + agg.owners[e.index] + ' — ' + agg.series[e.datasetIndex],
+          'Open tasks past their due date. Owner = ' + agg.owners[e.index] +
+          ' · task type = ' + agg.series[e.datasetIndex] + ' · due dates in IST.',
+          COLS_C4, rows);
+      },
+      onHover(e, els){ e.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+      scales:{
+        x:{ stacked,
+          title:{ display:true, text:'Owner (from sequence name)', font:{ size:11.5, weight:'600' }, color:'#98a2b3' },
+          grid:{ display:false },
+          ticks:{ font:{ size:11, weight:'600' }, maxRotation: agg.owners.length > 10 ? 45 : 0, autoSkip:false } },
+        y:{ stacked, beginAtZero:true,
+          title:{ display:true, text:'Overdue tasks', font:{ size:11.5, weight:'600' }, color:'#98a2b3' },
+          grid:{ color:'#f0f2f5' }, ticks:{ precision:0, font:{ size:11 } },
+          grace:'12%' }
+      },
+      plugins:{
+        legend:{ position:'top', align:'start',
+          labels:{ boxWidth:10, boxHeight:10, usePointStyle:true, pointStyle:'circle', font:{ size:11.5 }, padding:12 } },
+        tooltip:{ callbacks:{
+          label: c => c.dataset.label + ': ' + nf(c.parsed.y) + ' overdue',
+          footer(it){
+            const ch = it[0].chart;
+            const tot = ch.data.datasets.reduce((s, ds, di) =>
+              s + (ch.isDatasetVisible(di) ? (Number(ds.data[it[0].dataIndex]) || 0) : 0), 0);
+            return 'Owner total: ' + nf(tot) + '  ·  click to drill down';
+          } } },
+        datalabels:{
+          color: stacked ? '#fff' : '#344054',
+          anchor: stacked ? 'center' : 'end',
+          align:  stacked ? 'center' : 'top',
+          offset: stacked ? 0 : 2,
+          font:{ size:10, weight:'700' },
+          formatter: v => (v ? nf(v) : ''),
+          display(c){
+            const v = Number(c.dataset.data[c.dataIndex]) || 0;
+            if (!v) return false;
+            return stacked ? frac(c) >= 0.045 : true;
+          }
+        }
+      }
+    }
+  });
+  CHARTS.cv4.$showTotals = stacked;
+}
+
+function renderNotice4(){
+  const d = DB.dq.chart4, host = $('notice4'), li = [];
+  if (!DB.loaded){ host.innerHTML = ''; return; }
+  if (d.noDate) li.push('<b>' + nf(d.noDate) + '</b> task(s) excluded: no usable <code>dueToRaw</code>.');
+  if (d.sheetIstBlank || d.sheetIstSwapped){
+    li.push('The sheet\'s <code>dueToIST</code> column is <b>not used</b>. It is blank on <b>' +
+      nf(d.sheetIstBlank) + '</b> of ' + nf(d.total) + ' rows, and where it is filled the <b>day and month are ' +
+      'transposed</b> (' + nf(d.sheetIstSwapped) + ' rows provably swapped — e.g. a task due ' +
+      '<code>2026-05-03 09:49</code> shows as <code>2026-03-05 15:19</code>: the +5:30 is right, the date is not). ' +
+      'This chart derives the IST due date as <code>dueToRaw + 5:30</code> instead. Worth fixing the formula at source.');
+  }
+  if (d.unmatchedSeq) li.push('<b>' + nf(d.unmatchedSeq) + '</b> task(s) reference a sequence missing from <b>' +
+    esc(TABS.sequences.name) + '</b>, so no owner could be resolved; they appear under <b>Unknown</b>.');
+  if (d.notNew) li.push('<b>' + nf(d.notNew) + '</b> task(s) have a status other than <code>new</code>. ' +
+    'The tab is otherwise entirely open tasks, so nothing is filtered out by status here.');
+  li.push('Owner is the <b>first name on the sequence name</b>, not <code>assignedUserId</code> — that field holds only ' +
+    nf(new Set(DB.tasks.map(r => r.userId).filter(Boolean)).size) + ' shared licence seat ids across ' +
+    nf(new Set(DB.tasks.map(r => r.owner)).size) + ' people, so it cannot identify an individual. The seat id is a ' +
+    'column in every drill-down and export.');
+  paintNotice(host, li);
+}
+
+/* ===================================================================
    13. Global notice + orchestration
    =================================================================== */
 function renderGlobalNotice(){
@@ -2097,6 +2463,7 @@ function renderEverything(){
   renderChart1();
   renderChart2();
   renderChart3();
+  renderChart4();
   renderDiag();
   if (DB.lastUpdated) $('lastUpd').textContent = DB.lastUpdated.toLocaleTimeString('en-GB', { hour12:false });
 }
@@ -2121,6 +2488,14 @@ function refreshControls(){
   segControl($('bd2'), BREAK,   () => S2.breakdown, k => { S2.breakdown = k; refreshControls(); renderChart2(); });
   segControl($('st2'), BARS,    () => S2.stacked ? 'stacked' : 'grouped', k => { S2.stacked = (k === 'stacked'); refreshControls(); renderChart2(); });
   segControl($('ge2'), EMPTY,   () => S2.hideEmpty ? 'hide' : 'show', k => { S2.hideEmpty = (k === 'hide'); refreshControls(); renderChart2(); });
+  quickControl($('q4'), S4, () => { if (S4.quick !== 'custom'){ S4.from = S4.to = null; } refreshControls(); renderChart4(); });
+  segControl($('td4'), [{k:'basic',lab:'Platform types'},{k:'detail',lab:'Split LinkedIn'}],
+             () => S4.detailed ? 'detail' : 'basic',
+             k => { S4.detailed = (k === 'detail'); S4.typeSel.clear(); refreshControls(); renderChart4(); });
+  segControl($('st4'), BARS, () => S4.stacked ? 'stacked' : 'grouped',
+             k => { S4.stacked = (k === 'stacked'); refreshControls(); renderChart4(); });
+  segControl($('sr4'), [{k:'count',lab:'Most overdue'},{k:'name',lab:'Name'}],
+             () => S4.sort, k => { S4.sort = k; refreshControls(); renderChart4(); });
   quickControl($('q3'), S3, () => { if (S3.quick !== 'custom'){ S3.from = S3.to = null; } refreshControls(); renderChart3(); });
   segControl($('fe2'), [{k:'all',lab:'All emails'},{k:'first',lab:'First email of sequence only'}],
              () => S2.firstOnly ? 'first' : 'all',
@@ -2136,12 +2511,18 @@ $('uniq1').onchange = e => { S1.unique = e.target.checked; renderChart1(); };
 $('from3').onchange = e => { const t = parseCivil(e.target.value); if (t != null){ S3.from = startOfDay(t); S3.quick = 'custom'; refreshControls(); renderChart3(); } };
 $('to3').onchange   = e => { const t = parseCivil(e.target.value); if (t != null){ S3.to   = startOfDay(t); S3.quick = 'custom'; refreshControls(); renderChart3(); } };
 
+$('from4').onchange = e => { const t = parseCivil(e.target.value); if (t != null){ S4.from = startOfDay(t); S4.quick = 'custom'; refreshControls(); renderChart4(); } };
+$('to4').onchange   = e => { const t = parseCivil(e.target.value); if (t != null){ S4.to   = startOfDay(t); S4.quick = 'custom'; refreshControls(); renderChart4(); } };
+
 $('btnPull3').onclick = () => { S3.triedKey = null; S3.err = null; pull3(); };
 
 const ms1seq = makeMulti($('ms1seq'), 'sequence', S1.seqSel, renderChart1);
 const ms1own = makeMulti($('ms1own'), 'owner',    S1.ownSel, renderChart1);
 const ms2seq = makeMulti($('ms2seq'), 'sequence', S2.seqSel, renderChart2);
 const ms2own = makeMulti($('ms2own'), 'owner',    S2.ownSel, renderChart2);
+const ms4seq  = makeMulti($('ms4seq'),  'sequence',  S4.seqSel,  renderChart4);
+const ms4own  = makeMulti($('ms4own'),  'owner',     S4.ownSel,  renderChart4);
+const ms4type = makeMulti($('ms4type'), 'task type', S4.typeSel, renderChart4);
 
 $('btnRefresh').onclick = () => { if (!DB.loading) loadAll(); };
 
