@@ -54,7 +54,16 @@ vercel.json             security headers, no-store on the HTML
 
 ## How the data is joined
 
-- **Owner** — the first name on the sequence name (`Rahul_US_Direct_July` → Rahul).
+- **Owner** — the first roster name appearing anywhere in the sequence name. Names
+  follow several conventions — person-first (`Rahul_US_Direct_July`), region-first
+  (`US_BFSI_Akshay_New`, `Europe_DataCenter_Aryaman 2`) and status-prefixed
+  (`STOP!!US_VAR(Indirect)_Arsh`, `India_VAR_Rahul_Inactive`) — so taking the leading
+  token mislabelled a quarter of them as "Us", "Europe" or "Stopus". Scanning for a
+  roster name handles all three, and words like Europe, VAR or Riyad (a city) can
+  never be read as an owner because they are not on the roster. The roster is
+  `OWNERS` near the top of `index.html`; add a first name to onboard someone.
+  Sequences matching nobody show as **Unassigned** and are listed in the diagnostics
+  card, so a missing name is visible rather than absorbed into a wrong bar.
   `ownerUserId` is joined from the *All Sequences* tab and kept on every row, but
   licence seats are shared between people, so it identifies a seat rather than a
   person. It is available as a column in every drill-down and export.

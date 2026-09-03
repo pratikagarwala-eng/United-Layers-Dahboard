@@ -561,29 +561,41 @@ const TABS = {
   tasks:     { gid: '853369931',  name: 'Overdue Tasks' }
 };
 
-/* Owner = the first name on the sequence, e.g. "Rahul_US_Direct_July" -> Rahul.
-   ownerUserId is NOT used for this: licences are shared, so one id covers several
-   people. The raw id is still carried on every row and shown in drill-downs.
+/* Owner = the SDR/BDR named in the sequence name.
+   ownerUserId is NOT used: licences are shared, so one id covers several people.
+   The raw id is still carried on every row and shown in drill-downs.
 
-   OWNER_FIXES handles the sequences that don't start with a person: typos, and
-   names where the person sits later in the string. Keyed by the EXACT sequence
-   name (lowercased/trimmed) so a fix can never spill onto a similarly-named
-   sequence. Every patch applied is listed in the diagnostics card, and any
-   sequence not listed here just uses its first token. */
-const OWNER_FIXES = {
-  'nishany_indirect_hunting_automated': 'Nishant',   // typo for Nishant
-  'manual email_ishika'               : 'Ishika',    // person named at the end
-  'manual_testinfra_ishika'           : 'Ishika',
-  'manual_aryaman'                    : 'Aryaman',
-  'inbound leads_gaurav master'       : 'Gaurav',
-  /* region-first names: the person is at the end, not the start */
-  'europe_var_aryaman 4'              : 'Aryaman',
-  'europe_var_aryaman 3'              : 'Aryaman',
-  'europe_datacenter_aryaman 4'       : 'Aryaman',
-  'us_enterprises_combined_nishant'   : 'Nishant',
-  'in_dc_rahul'                       : 'Rahul',
-  'me_si_rahul'                       : 'Rahul'
-};
+   Sequence names follow several conventions — person-first
+   ("Rahul_US_Direct_July"), region-first ("US_BFSI_Akshay_New",
+   "Europe_DataCenter_Aryaman 2"), status-prefixed ("STOP!!US_VAR(Indirect)_Arsh",
+   "India_VAR_Rahul_Inactive") — so taking the leading token mislabels a quarter of
+   them as "Us", "Europe", "Stopus" and so on. Instead the name is scanned left to
+   right for the first token matching the roster below. Person-first names still win
+   because their name is the first token, and words like Europe, VAR or Riyad (a
+   city) can never be mistaken for an owner because they are not on the roster.
+
+   To add a team member, add their first name here. Sequences matching nobody show
+   as "Unassigned" and are listed in the diagnostics card, so a missing name is
+   visible rather than silently absorbed into a wrong bar. */
+const OWNERS = ['Akshay', 'Arsh', 'Aryaman', 'Aryan', 'Bhanu', 'Gaurav', 'Ishika',
+                'Nishant', 'Rahul', 'Raj', 'Rishita', 'Sadaf', 'Sanya'];
+
+/* Extra spellings that should resolve to a roster name: typos, and surnames used
+   in place of a first name. */
+const OWNER_ALIASES = { nishany: 'Nishant', saxena: 'Raj' };
+
+/* Last-resort per-sequence override, keyed by the EXACT sequence name
+   (lowercased/trimmed). Empty because the roster scan covers every sequence in the
+   workbook today; kept as an escape hatch for a name the scan cannot resolve. */
+const OWNER_FIXES = {};
+
+/* built once — ownerFromSequenceName runs per row over tens of thousands of rows */
+const OWNER_LOOKUP = (() => {
+  const m = {};
+  OWNERS.forEach(o => { m[o.toLowerCase()] = o; });
+  Object.keys(OWNER_ALIASES).forEach(k => { m[k] = OWNER_ALIASES[k]; });
+  return m;
+})();
 
 const MAX_SERIES = 12;           // series shown before collapsing into "Other"
 const PALETTE = ['#2f6df6','#0e9f6e','#f79009','#7a5af8','#e6483d','#06aed4','#d444f1',
@@ -994,19 +1006,19 @@ function buildModel(em, sq, cp, ct, tk){
   };
 }
 
-/* Owner = the first name on the sequence name.
-   Takes the leading token, cuts it at the first separator so "Rishita.sv" -> Rishita
-   and "BHANU-Data-Center" -> BHANU, then title-cases it. An exact-name entry in
-   OWNER_FIXES wins over the first token. */
+/* First roster name appearing anywhere in the sequence name. Tokens are matched
+   whole, so "Aryan" never swallows "Aryaman". */
 function ownerFromSequenceName(name){
   const s = String(name || '').trim();
-  if (!s) return 'Unknown';
+  if (!s) return 'Unassigned';
   const fix = OWNER_FIXES[s.toLowerCase()];
   if (fix) return fix;
-  let tok = s.split(/[_\s]+/).filter(Boolean)[0] || s;
-  tok = tok.split('.')[0].split('-')[0].replace(/[^A-Za-z]/g, '');
-  if (!tok) return 'Unknown';
-  return titleCase(tok);
+  const parts = s.split(/[^A-Za-z]+/);
+  for (let i = 0; i < parts.length; i++){
+    const hit = OWNER_LOOKUP[parts[i].toLowerCase()];
+    if (hit) return hit;
+  }
+  return 'Unassigned';
 }
 
 /* Task type for the grouped bars. "Basic" keeps the platform's three types;
@@ -1910,7 +1922,9 @@ function renderDiag(){
 
     '<div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-start">' +
       '<div><div class="flab">Owner</div><div style="font-size:13px;margin-top:4px;max-width:400px">' +
-        'First name on the sequence name — <code>Rahul_US_Direct_July</code> → <b>Rahul</b>' +
+        'First roster name appearing in the sequence name — <code>Rahul_US_Direct_July</code> and ' +
+        '<code>US_BFSI_Akshay_New</code> both resolve. Roster (' + OWNERS.length + '): ' +
+        esc(OWNERS.join(', ')) + '.' +
         '<div class="hint" style="margin-top:4px"><code>ownerUserId</code> is joined from <b>' + esc(TABS.sequences.name) +
         '</b> and kept on every row, but licences are shared (' +
         nf(new Set(DB.emails.concat(DB.contacts).map(r => r.ownerId).filter(Boolean)).size) + ' ids across ' +
@@ -1956,13 +1970,20 @@ function renderDiag(){
     Object.entries(DB.ownerDerivation).sort((a, b) => a[0].localeCompare(b[0]))
       .map(([seq, own]) => {
         const patched = !!OWNER_FIXES[String(seq).trim().toLowerCase()];
-        const solo = ownerSeqCount[own] === 1 && !patched;
-        return '<tr' + (patched || solo ? ' style="background:#fffaeb"' : '') + '>' +
+        const unassigned = own === 'Unassigned';
+        /* where in the name the matched token sat: 0 = person-first convention */
+        const parts = String(seq).split(/[^A-Za-z]+/);
+        let pos = -1;
+        for (let i = 0; i < parts.length; i++){
+          if (OWNER_LOOKUP[parts[i].toLowerCase()]){ pos = i; break; }
+        }
+        return '<tr' + (unassigned || patched ? ' style="background:#fffaeb"' : '') + '>' +
           '<td title="' + esc(seq) + '">' + esc(seq) + '</td>' +
           '<td><b>' + esc(own) + '</b></td><td>' +
-          (patched ? '<span class="pill y">OWNER_FIXES override</span>'
-           : solo   ? '<span class="pill n">first token — only sequence for this owner, check it is a person</span>'
-                    : '<span class="hint">first token</span>') + '</td></tr>';
+          (patched      ? '<span class="pill y">OWNER_FIXES override</span>'
+           : unassigned ? '<span class="pill n">no roster name in this sequence name</span>'
+           : pos === 0  ? '<span class="hint">leading name</span>'
+                        : '<span class="hint">name found at token ' + (pos + 1) + '</span>') + '</td></tr>';
       }).join('') +
     '</tbody></table></div></details>' +
 
