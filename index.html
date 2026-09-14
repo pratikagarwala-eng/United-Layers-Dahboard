@@ -632,6 +632,18 @@ const startOfMonth = t => Date.UTC(cY(t), cM(t), 1);
 const IST_OFFSET = 5.5 * 3600000;
 const istNow = () => Date.now() + IST_OFFSET;
 
+/* Every timestamp in the sheet is UTC, whatever the column is called. Established
+   by binning All Email Activities' deliveryDate against the reporting API's
+   known-UTC hourly windows: they match hour for hour at a zero offset (r=0.992,
+   against r=0.23 for IST). addingDate, dueToRaw and startAtRaw all share that same
+   clock (r=0.87, 0.71, 0.70 at zero offset), so the whole workbook is UTC.
+
+   The dashboard reports in IST throughout, so every sheet timestamp is converted
+   here, once, at parse time. Everything downstream is already IST.
+   (The Overdue Tasks tab's own dueToIST column is the one already-converted
+   column — its +5:30 is right, though its day and month are transposed.) */
+const sheetToIst = v => { const t = parseCivil(v); return t == null ? null : t + IST_OFFSET; };
+
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const iso = t => {
   const d = new Date(t);
@@ -833,7 +845,7 @@ function buildModel(em, sq, cp, ct, tk){
       seqName: eName ? String(r[eName] == null ? '' : r[eName]).trim() : '',
       step   : isNaN(stepNum) ? null : stepNum,
       stepDisp: isNaN(stepDisp) ? null : stepDisp,
-      ts     : parseCivil(eDate ? r[eDate] : null),
+      ts     : sheetToIst(eDate ? r[eDate] : null),          // deliveryDate, UTC -> IST
       rawDate: eDate ? (r[eDate] == null ? '' : String(r[eDate])) : '',
       email  : eMail ? String(r[eMail] == null ? '' : r[eMail]).trim() : '',
       cid    : eCid ? String(r[eCid] == null ? '' : r[eCid]).trim() : '',
@@ -877,7 +889,7 @@ function buildModel(em, sq, cp, ct, tk){
         _i: i,
         seqId  : m.seq ? String(r[m.seq] == null ? '' : r[m.seq]).trim() : '',
         seqName: m.name ? String(r[m.name] == null ? '' : r[m.name]).trim() : '',
-        ts     : parseCivil(m.date ? r[m.date] : null),
+        ts     : sheetToIst(m.date ? r[m.date] : null),      // addingDate, UTC -> IST
         rawDate: m.date ? (r[m.date] == null ? '' : String(r[m.date])) : '',
         email  : m.email ? String(r[m.email] == null ? '' : r[m.email]).trim() : '',
         cid    : m.cid ? String(r[m.cid] == null ? '' : r[m.cid]).trim() : '',
@@ -920,7 +932,7 @@ function buildModel(em, sq, cp, ct, tk){
     const kDays = pickCol(tk.headers, [/daysoverdue/, /days.*over/, /overdue.*days/]);
 
     DB.tasks = tk.rows.map((r, i) => {
-      const rawTs = parseCivil(kDueR ? r[kDueR] : null);         // already IST
+      const rawTs = sheetToIst(kDueR ? r[kDueR] : null);         // dueToRaw, UTC -> IST
       const sheetIst = parseCivil(kDueI ? r[kDueI] : null);      // transposed and double-shifted
       const base = String(kType ? (r[kType] == null ? '' : r[kType]) : '').trim();
       const li = String(kLi ? (r[kLi] == null ? '' : r[kLi]) : '').trim();
@@ -938,7 +950,7 @@ function buildModel(em, sq, cp, ct, tk){
         ts     : rawTs,                                           // due date, IST
         tsRaw  : rawTs,
         sheetIst: sheetIst,
-        startTs: parseCivil(kStart ? r[kStart] : null),
+        startTs: sheetToIst(kStart ? r[kStart] : null),      // startAtRaw, UTC -> IST
         days   : kDays != null && r[kDays] != null && r[kDays] !== '' ? Number(r[kDays]) : null
       };
     });
@@ -2303,7 +2315,7 @@ const COLS_C4 = [
   { h:'Contact ID',   get:r => r.cid },
   { h:'Sequence ID',  get:r => r.seqId },
   { h:'ownerUserId (shared seat)', get:r => r.userId },
-  { h:'Due (raw/UTC in sheet)',    get:r => fmtDateTime(r.tsRaw) }
+  { h:'Due (UTC, as stored in sheet)', get:r => fmtDateTime(r.tsRaw == null ? null : r.tsRaw - IST_OFFSET) }
 ];
 
 function renderChart4(){

@@ -74,21 +74,21 @@ vercel.json             security headers, no-store on the HTML
   labels in IST. Bucketing uses UTC getters over civil timestamps, so results do not
   shift with the viewer's browser timezone.
 
-  The sheet stores IST already, despite some column names suggesting otherwise, so no
-  conversion is applied to `addingDate`, `deliveryDate`, `dueToRaw` or `startAtRaw`.
-  This was established rather than assumed: `deliveryDate`'s hourly profile was
-  cross-correlated against the reporting API's known-UTC windows and aligned at +5h
-  (r=0.95, versus r=0.18 at zero shift), and the task columns align with that same
-  IST rhythm at a 0h shift (r=0.71).
+  **The sheet stores UTC**, whatever the columns are called, so every sheet timestamp
+  is converted once at parse time via `sheetToIst` (+5:30). This was established by
+  binning `deliveryDate` against the reporting API's known-UTC hourly windows: they
+  match hour for hour at a zero offset (r=0.992, versus r=0.23 for IST).
+  `addingDate`, `dueToRaw` and `startAtRaw` share that same clock (r=0.87, 0.71,
+  0.70 at zero offset). Verified end to end: chart 2 for one owner on IST 10 Sep
+  returns 85, matching the platform's own report exactly, sequence by sequence
+  (67 / 11 / 7).
 
-  Chart 3 is the one place a conversion is needed: the API takes real UTC instants,
-  so an IST day boundary is sent as `-5:30` from IST midnight (IST 8 Sep 00:00 is
-  `2026-09-07T18:30:00Z`). Without that the card would report UTC days while the other
-  charts report IST days.
-- **The sheet's `dueToIST` column is not used.** It is blank on most rows, its day and
-  month are transposed (a task due `2026-05-03 09:49` appears as `2026-03-05 15:19`),
-  and it adds 5:30 to a value that is already IST. Fixing that formula at source would
-  let the column be used directly.
+  Chart 3 converts in the other direction: the API takes real UTC instants, so an IST
+  day boundary is sent as `-5:30` from IST midnight (IST 8 Sep 00:00 is
+  `2026-09-07T18:30:00Z`).
+- **The sheet's `dueToIST` column is not used.** Its +5:30 offset is correct, but it is
+  blank on most rows and its day and month are transposed (a task due
+  `2026-05-03 09:49` appears as `2026-03-05 15:19`). `dueToRaw` is converted instead.
 - **De-duplication** — contact email lowercased, falling back to contact ID. When
   "unique contacts only" is on, each contact is attributed to its earliest
   `addingDate` in range, so stacked segments always sum to the headline total.
