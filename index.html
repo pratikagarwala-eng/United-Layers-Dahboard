@@ -1049,7 +1049,9 @@ function freshState(extra){
 }
 /* chart 1 is owner-only by design — it has no sequence breakdown control */
 const S1 = freshState({ unique:false });
-const S2 = freshState({ firstOnly:true });
+/* Default to every send, so the headline reconciles with the sending platform's
+   own report. First-email-only is one click away on the toggle. */
+const S2 = freshState({ firstOnly:false });
 
 const QUICKS = [
   { k:'yesterday', lab:'Yesterday' },
