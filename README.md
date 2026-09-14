@@ -70,14 +70,25 @@ vercel.json             security headers, no-store on the HTML
 - **First email** — a row in *All Email Activities* counts as a first email when its
   `sequenceStepNumber` equals that sequence's `email_step_number` in *Campaign
   Structure*. Resolved per sequence; step 1 is never assumed.
-- **Timezone** — sheet timestamps carry no offset and are treated as IST
-  (Asia/Kolkata) wall-clock. All bucketing uses UTC getters over civil timestamps,
-  so results do not shift with the viewer's browser timezone.
-- **Overdue task due dates** — taken from `dueToRaw` (UTC) plus 5:30. The sheet's own
-  `dueToIST` column is deliberately ignored: it is blank on most rows, and where it is
-  filled the day and month are transposed (a task due `2026-05-03 09:49` appears as
-  `2026-03-05 15:19` — the +5:30 is right, the date is not). Fixing that formula at
-  source would let the column be used directly.
+- **Timezone — IST (Asia/Kolkata) everywhere.** Every chart buckets, filters and
+  labels in IST. Bucketing uses UTC getters over civil timestamps, so results do not
+  shift with the viewer's browser timezone.
+
+  The sheet stores IST already, despite some column names suggesting otherwise, so no
+  conversion is applied to `addingDate`, `deliveryDate`, `dueToRaw` or `startAtRaw`.
+  This was established rather than assumed: `deliveryDate`'s hourly profile was
+  cross-correlated against the reporting API's known-UTC windows and aligned at +5h
+  (r=0.95, versus r=0.18 at zero shift), and the task columns align with that same
+  IST rhythm at a 0h shift (r=0.71).
+
+  Chart 3 is the one place a conversion is needed: the API takes real UTC instants,
+  so an IST day boundary is sent as `-5:30` from IST midnight (IST 8 Sep 00:00 is
+  `2026-09-07T18:30:00Z`). Without that the card would report UTC days while the other
+  charts report IST days.
+- **The sheet's `dueToIST` column is not used.** It is blank on most rows, its day and
+  month are transposed (a task due `2026-05-03 09:49` appears as `2026-03-05 15:19`),
+  and it adds 5:30 to a value that is already IST. Fixing that formula at source would
+  let the column be used directly.
 - **De-duplication** — contact email lowercased, falling back to contact ID. When
   "unique contacts only" is on, each contact is attributed to its earliest
   `addingDate` in range, so stacked segments always sum to the headline total.

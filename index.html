@@ -892,12 +892,16 @@ function buildModel(em, sq, cp, ct, tk){
   }
 
   /* ---------- Overdue Tasks (fact for chart 4) ----------
-     dueToIST in the sheet is unusable: it is populated on only a minority of rows
-     and has the day and month transposed (dueToRaw 2026-05-03 09:49 becomes
-     2026-03-05 15:19 — the +5:30 is right, the date is swapped). dueToRaw is
-     complete and is UTC, so the IST due date is derived here as dueToRaw + 5:30
-     and the sheet's own column is ignored. The discrepancy is reported in the
-     chart's notes so the sheet formula can be fixed at source. */
+     Despite the column names, dueToRaw and startAtRaw are ALREADY IST — they are
+     not UTC. Verified against All Email Activities, whose deliveryDate was proven
+     to be IST by cross-correlating its hourly profile against the reporting API's
+     UTC windows (best alignment +5h, r=0.95). The task columns line up with that
+     same IST rhythm at a 0h shift (r=0.71), so no conversion is applied.
+
+     The sheet's own dueToIST column is unusable twice over: it is blank on most
+     rows, its day and month are transposed, and it best aligns at -5h, i.e. it
+     adds 5:30 to a value that was already IST. Both faults are reported in the
+     chart's notes so the formula can be fixed at source. */
   DB.taskHeaders = tk.headers; DB.taskRawRows = tk.rows.length;
   DB.tasks = [];
   if (!tk.empty){
@@ -915,10 +919,9 @@ function buildModel(em, sq, cp, ct, tk){
     const kStart= pickCol(tk.headers, [/^startatraw$/, /start.*raw/, /^startat$/]);
     const kDays = pickCol(tk.headers, [/daysoverdue/, /days.*over/, /overdue.*days/]);
 
-    const IST_SHIFT = 5.5 * 3600000;
     DB.tasks = tk.rows.map((r, i) => {
-      const rawTs = parseCivil(kDueR ? r[kDueR] : null);         // UTC wall-clock
-      const sheetIst = parseCivil(kDueI ? r[kDueI] : null);      // present but transposed
+      const rawTs = parseCivil(kDueR ? r[kDueR] : null);         // already IST
+      const sheetIst = parseCivil(kDueI ? r[kDueI] : null);      // transposed and double-shifted
       const base = String(kType ? (r[kType] == null ? '' : r[kType]) : '').trim();
       const li = String(kLi ? (r[kLi] == null ? '' : r[kLi]) : '').trim();
       return {
@@ -932,10 +935,10 @@ function buildModel(em, sq, cp, ct, tk){
         name   : kCnm ? String(r[kCnm] == null ? '' : r[kCnm]).trim() : '',
         seqId  : kSeq ? String(r[kSeq] == null ? '' : r[kSeq]).trim() : '',
         stepId : kStep ? String(r[kStep] == null ? '' : r[kStep]).trim() : '',
-        ts     : rawTs == null ? null : rawTs + IST_SHIFT,        // due date, IST
+        ts     : rawTs,                                           // due date, IST
         tsRaw  : rawTs,
         sheetIst: sheetIst,
-        startTs: (() => { const s = parseCivil(kStart ? r[kStart] : null); return s == null ? null : s + IST_SHIFT; })(),
+        startTs: parseCivil(kStart ? r[kStart] : null),
         days   : kDays != null && r[kDays] != null && r[kDays] !== '' ? Number(r[kDays]) : null
       };
     });
@@ -2031,10 +2034,15 @@ const S3 = { quick:'thismonth', from:null, to:null, data:null, at:null, busy:fal
              triedKey:null };     // range we have already attempted, so we retry once, not forever
 const rangeKey = r => iso(r.start) + '_' + iso(r.end);
 
-/* The API treats the window as [from, to), so the selected end day is included
-   by sending the following midnight. */
-const apiFrom = t => iso(t) + 'T00:00:00Z';
-const apiTo   = t => iso(t + DAY) + 'T00:00:00Z';
+/* The API takes real UTC instants, while the range picker works in IST civil days.
+   An IST midnight is 18:30 UTC the previous day, so the boundary is shifted by
+   -5:30 before being sent. Without this the card would report UTC days while the
+   rest of the dashboard reports IST days — a 5.5h mismatch between the charts.
+   The window is [from, to), so the selected end day is included by sending the
+   following IST midnight. */
+const utcInstant = t => new Date(t - IST_OFFSET).toISOString().replace(/\.\d{3}Z$/, 'Z');
+const apiFrom = t => utcInstant(t);
+const apiTo   = t => utcInstant(t + DAY);
 
 /* accepts the array form the API returns, or a bare object */
 function parseOverview(txt){
@@ -2061,7 +2069,7 @@ function renderChart3(){
   const range = resolveRange(S3, []);
   const key = rangeKey(range);
   $('from3').value = iso(range.start); $('to3').value = iso(range.end);
-  $('range3').textContent = 'Range sent to the API: ' + apiFrom(range.start) + ' → ' + apiTo(range.end);
+  $('range3').textContent = 'IST ' + rangeLabel(range) + ' = ' + apiFrom(range.start) + ' → ' + apiTo(range.end) + ' sent to the API';
 
   /* Numbers belong to the range they were fetched for. The moment the range moves,
      the loaded figures are stale — drop them rather than show last range's totals
@@ -2434,8 +2442,10 @@ function renderNotice4(){
     li.push('The sheet\'s <code>dueToIST</code> column is <b>not used</b>. It is blank on <b>' +
       nf(d.sheetIstBlank) + '</b> of ' + nf(d.total) + ' rows, and where it is filled the <b>day and month are ' +
       'transposed</b> (' + nf(d.sheetIstSwapped) + ' rows provably swapped — e.g. a task due ' +
-      '<code>2026-05-03 09:49</code> shows as <code>2026-03-05 15:19</code>: the +5:30 is right, the date is not). ' +
-      'This chart derives the IST due date as <code>dueToRaw + 5:30</code> instead. Worth fixing the formula at source.');
+      '<code>2026-05-03 09:49</code> shows as <code>2026-03-05 15:19</code>), and it adds 5:30 to a value that is ' +
+      '<b>already IST</b>, so the time is wrong too. <code>dueToRaw</code> is used as-is: it is already IST, ' +
+      'confirmed by matching its hourly rhythm against <code>deliveryDate</code>, which the reporting API proves ' +
+      'is IST. Worth fixing the formula at source.');
   }
   if (d.unmatchedSeq) li.push('<b>' + nf(d.unmatchedSeq) + '</b> task(s) reference a sequence missing from <b>' +
     esc(TABS.sequences.name) + '</b>, so no owner could be resolved; they appear under <b>Unknown</b>.');
